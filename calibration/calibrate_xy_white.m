@@ -24,14 +24,20 @@ rotFrame = imrotate(frameD, -47, 'bilinear', 'crop');
 camH     = size(rotFrame, 1);
 camW     = size(rotFrame, 2);
 
-[~, peakIdx] = max(rotFrame(:));
-[pRow, pCol]  = ind2sub(size(rotFrame), peakIdx);
-
 %% Detect DMD footprint (axis-aligned after rotation)
 smoothed = imgaussfilt(rotFrame, 5);
 mask     = smoothed > 0.15 * max(smoothed(:));
 mask     = imfill(bwareafilt(mask, 1), 'holes');
 bb       = regionprops(mask, 'BoundingBox').BoundingBox;  % [x y w h]
+
+% "All mirrors on" is a flat-top illumination, not a peaked beam, and the
+% region can contain a real optical hotspot (dust/reflection/glint) that's
+% genuinely one of the brightest points in the frame — any intensity-based
+% measure (max or weighted centroid) gets pulled toward it. Use the
+% geometric center of the detected footprint instead: bb is set by the
+% mask's outer extent, which an interior hotspot doesn't move.
+pRow = round(bb(2) + bb(4)/2);
+pCol = round(bb(1) + bb(3)/2);
 corners  = [bb(1)        bb(2);
             bb(1)+bb(3)  bb(2);
             bb(1)+bb(3)  bb(2)+bb(4);
@@ -67,7 +73,7 @@ subplot(2, 2, 1);
 imshow(img, 'InitialMagnification', 'fit');
 title('DMD pattern (all on)');
 
-% Rotate corners back to original frame coordinates for display
+% Rotate corners (and center marker) back to original frame coordinates for display
 cx = camW / 2;
 cy = camH / 2;
 dx = corners(:,1) - cx;
@@ -75,12 +81,17 @@ dy = corners(:,2) - cy;
 cornersOrig = [cx + dx*cosd(47) + dy*sind(47), ...
                cy - dx*sind(47) + dy*cosd(47)];
 
+dxP = pCol - cx;
+dyP = pRow - cy;
+pColOrig = cx + dxP*cosd(47) + dyP*sind(47);
+pRowOrig = cy - dxP*sind(47) + dyP*cosd(47);
+
 subplot(2, 2, 2);
 imshow(frame, []);
-title(sprintf('Camera  peak: [%d, %d]', pRow, pCol));
+title(sprintf('Camera  center: [%d, %d]', pRow, pCol));
 hold on;
 plot([cornersOrig(:,1); cornersOrig(1,1)], [cornersOrig(:,2); cornersOrig(1,2)], 'r-', 'LineWidth', 1.5);
-plot(pCol, pRow, 'r+', 'MarkerSize', 10, 'LineWidth', 1.5);
+plot(pColOrig, pRowOrig, 'r+', 'MarkerSize', 10, 'LineWidth', 1.5);
 hold off;
 
 subplot(2, 2, 3);

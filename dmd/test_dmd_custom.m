@@ -40,10 +40,19 @@ H = double(info.height);  % 1600
 %% Single pixel lines
 img = zeros(H, W, 'uint8');
 cRow = round(H/2);  cCol = round(W/2);
-for off = [-3, 0, 2]
+for off = [-3, 0, 4]
     img(cRow + off, :) = 255;
     img(:, cCol + off) = 255;
 end
+dmd.displayFrame(img);
+pause(0.5);
+
+%% Single central dot
+dotRadius = 100;
+img = zeros(H, W, 'uint8');
+[xx, yy] = meshgrid(1:W, 1:H);
+dot = (xx - cCol).^2 + (yy - cRow).^2 <= dotRadius^2;
+img(dot) = 255;
 dmd.displayFrame(img);
 pause(0.5);
 

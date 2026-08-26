@@ -12,7 +12,8 @@ info = dmd.getInfo();
 dmdW = double(info.width);
 dmdH = double(info.height);
 
-img = makeLinesPattern(dmdH, dmdW);
+off = [-3, 0, 6];
+img = makeLinesPattern(dmdH, dmdW, off);
 dmd.displayFrame(img);
 pause(0.5);
 frame = cam.capture();
@@ -27,21 +28,35 @@ rotFrame = imrotate(frameD, -rotAngle_deg, 'bilinear', 'crop');
 rotH     = size(rotFrame, 1);
 rotW     = size(rotFrame, 2);
 
-%% Crop ±500 um around centre
+%% Locate crop centre: reuse the beam centre detected by calibrate_xy_white.m
+% (same -47deg rotation) instead of assuming the beam sits at the frame
+% centre — it isn't necessarily centred in the camera FOV.
+calDir = fullfile(char(luminose.f.luminoseData), 'calibration');
+wFiles = dir(fullfile(calDir, 'white_*.mat'));
+wData  = [];
+if isempty(wFiles)
+    warning('calibrate_xy_lines:noWhite', ...
+        'No white calibration .mat found — falling back to frame-centre crop (may be off if the beam is not centred in the FOV).');
+    centreRow = round(rotH/2);
+    centreCol = round(rotW/2);
+else
+    [~, wIdx] = max([wFiles.datenum]);
+    wData     = load(fullfile(calDir, wFiles(wIdx).name), 'results');
+    centreRow = wData.results.pRow;
+    centreCol = wData.results.pCol;
+    fprintf('Crop centred on white calibration beam centre: %s  [%d, %d]\n', ...
+        wFiles(wIdx).name, centreRow, centreCol);
+end
+
+%% Crop ±500 um around the beam centre
 cropPad_px = round(500 / cam_px_um);
-rCrop = max(1, round(rotH/2) - cropPad_px) : min(rotH, round(rotH/2) + cropPad_px);
-cCrop = max(1, round(rotW/2) - cropPad_px) : min(rotW, round(rotW/2) + cropPad_px);
+rCrop = max(1, round(centreRow) - cropPad_px) : min(rotH, round(centreRow) + cropPad_px);
+cCrop = max(1, round(centreCol) - cropPad_px) : min(rotW, round(centreCol) + cropPad_px);
 rotCrop = rotFrame(rCrop, cCrop);
 
 %% Normalize crop by white beam profile
 rotCropNorm = rotCrop;
-calDir = fullfile(char(luminose.f.luminoseData), 'calibration');
-wFiles = dir(fullfile(calDir, 'white_*.mat'));
-if isempty(wFiles)
-    warning('calibrate_xy_lines:noWhite', 'No white calibration .mat found — skipping normalization.');
-else
-    [~, wIdx]  = max([wFiles.datenum]);
-    wData      = load(fullfile(calDir, wFiles(wIdx).name), 'results');
+if ~isempty(wData)
     wRot       = double(wData.results.rotFrame);
     wCrop      = wRot(rCrop, cCrop);
     thresh     = 0.05 * max(wCrop(:));
@@ -190,10 +205,10 @@ W2 = floor(size(img,2) / k);
 out = blockproc(img(1:H2*k, 1:W2*k), [k k], @(b) max(b.data(:)));
 end
 
-function img = makeLinesPattern(H, W)
+function img = makeLinesPattern(H, W, off)
 img = zeros(H, W, 'uint8');
 cRow = round(H/2);  cCol = round(W/2);
-for off = [-3, 0, 2]
+for off_i = off
     img(cRow + off, :) = 255;
     img(:, cCol + off) = 255;
 end

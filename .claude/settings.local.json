@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Read(//mnt/c/Users/harrislab/MATLAB/DMDController/examples/**)",
-      "Read(//mnt/c/Users/harrislab/MATLAB/DMDController/+DMDController/**)"
+      "Read(//mnt/c/Users/harrislab/MATLAB/DMDController/+DMDController/**)",
+      "Read(//mnt/c/Users/harrislab/luminoseData/calibration/**)",
+      "Bash(python3)"
     ]
   }
 }

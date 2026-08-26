@@ -27,9 +27,32 @@ BLOCK_SIZE_DMDPX = 64;   % must match blockSize in test_dmd_custom.m Test 3
 
 imgPath = fullfile(char(luminose.f.luminoseData), 'calibration', 'checkerboard.tif');
 if ~exist(imgPath, 'file')
-    error('calibrate_xy_checkerboard:missingFile', 'Not found: %s', imgPath);
+    fprintf('%s not found — displaying checkerboard on DMD and capturing from camera.\n', imgPath);
+
+    cam = CameraModel(luminose.camera);
+    dmd = DMDController.DMD();
+    dmd.connect(0);
+    info = dmd.getInfo();
+    W = double(info.width);
+    H = double(info.height);
+
+    [xx, yy] = meshgrid(1:W, 1:H);
+    checker = logical(mod(floor((xx-1)/BLOCK_SIZE_DMDPX) + floor((yy-1)/BLOCK_SIZE_DMDPX), 2));
+    dmd.displayFrame(checker);
+    pause(0.5);
+    frame = cam.capture();
+
+    dmd.halt();
+    dmd.disconnect();
+    cam.disconnect();
+
+    outDir = fileparts(imgPath);
+    if ~exist(outDir, 'dir'), mkdir(outDir); end
+    imwrite(frame, imgPath);
+    fprintf('Saved captured checkerboard: %s\n', imgPath);
+else
+    frame = imread(imgPath);
 end
-frame = imread(imgPath);
 if ndims(frame) == 3
     frame = rgb2gray(frame);
 end

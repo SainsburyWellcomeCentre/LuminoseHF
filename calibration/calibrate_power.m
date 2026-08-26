@@ -1,9 +1,13 @@
-%% 
-% calibrate_power  Record peak camera intensity for each laser power setting.
+%%
+% calibrate_power  Record mean camera intensity within the illuminated DMD
+%   footprint, for each laser power setting.
 %
 %   Sweeps through all rows in dmd/power_calibration.csv, captures a frame
-%   at each power step, records the peak pixel value, and writes results back
-%   into the intensity_at_camera column.
+%   at each power step, records the mean pixel value over the illuminated
+%   region (detected once, from a reference frame at max power — a single
+%   pixel's peak value is dominated by shot noise/hot pixels; averaging over
+%   the whole illuminated footprint is far less noisy), and writes results
+%   back into the intensity_at_camera column.
 %
 %   Warnings are printed if any frame is saturated (>95% of 65535).
 %   A power-vs-intensity plot is shown on completion.
@@ -32,19 +36,32 @@ satThresh    = 0.95 * 65535;
 
 laser.setEnabled(true);
 
+% Detect the illuminated region once, from a reference frame at max power,
+% so every step below is averaged over the same fixed spatial mask rather
+% than read off a single (noisy) pixel.
+laser.setPower(max(T.power_setting_mW));
+pause(0.3);
+refFrame  = double(cam.capture());
+smoothed  = imgaussfilt(refFrame, 5);
+illumMask = smoothed > 0.15 * max(smoothed(:));
+illumMask = imfill(bwareafilt(illumMask, 1), 'holes');
+fprintf('Illuminated region: %d px (%.1f%% of frame)\n\n', ...
+    nnz(illumMask), 100 * nnz(illumMask) / numel(illumMask));
+
 for i = 1:nSteps
     laser.setPower(T.power_setting_mW(i));
     pause(0.3);   % allow power to stabilise
 
-    frame = cam.capture();
-    peak  = double(max(frame(:)));
-    intensities(i)  = peak;
+    frame = double(cam.capture());
+    peak  = max(frame(:));
+    meanIntensity   = mean(frame(illumMask));
+    intensities(i)  = meanIntensity;
     saturated(i)    = peak > satThresh;
 
     flag = '';
     if saturated(i), flag = '  *** SATURATED ***'; end
-    fprintf('  [%2d/%d] %6.1f mW  peak = %5d%s\n', ...
-        i, nSteps, T.power_setting_mW(i), peak, flag);
+    fprintf('  [%2d/%d] %6.1f mW  mean = %7.1f  peak = %5d%s\n', ...
+        i, nSteps, T.power_setting_mW(i), meanIntensity, peak, flag);
 end
 
 laser.setEnabled(false);
@@ -69,24 +86,51 @@ stamp   = datestr(now, 'yyyymmdd_HHMMSS');
 pngPath = fullfile(outDir, ['power_' stamp '.png']);
 svgPath = fullfile(outDir, ['power_' stamp '.svg']);
 
+% Irradiance at the sample plane: the all-white calibration pattern fills the
+% full DMD field, which projects to a projectedDMDlength(mm) x
+% projectedDMDlength*info.height/info.width(mm) rectangle
+areaAtSample_mm2  = luminose.dmd.projectedDMDlength^2 * (double(info.height) / double(info.width));
+irradiance_mW_mm2 = T.power_at_sample_mW / areaAtSample_mm2;
+
+% Detect where the laser actually turns on: baseline camera noise is
+% estimated from the lowest-power steps. Require two consecutive steps
+% above threshold so a single borderline point (e.g. right at the edge of
+% the noise floor) doesn't get accepted as the true turn-on.
+nBaseline   = min(10, nSteps);
+baseline    = median(intensities(1:nBaseline));
+baselineStd = std(intensities(1:nBaseline));
+aboveThresh = intensities > baseline + 5 * baselineStd;
+onsetIdx    = find(aboveThresh(1:end-1) & aboveThresh(2:end), 1);
+if isempty(onsetIdx)
+    onsetIdx = find(aboveThresh, 1);
+end
+if isempty(onsetIdx)
+    warning('calibrate_power: no clear laser turn-on point detected in intensity data.');
+    onsetIdx = 1;
+end
+fprintf('Laser turn-on detected at step %d (%.1f mW setting, %.2f mW at sample)\n', ...
+    onsetIdx, T.power_setting_mW(onsetIdx), T.power_at_sample_mW(onsetIdx));
+
 fig = figure('Name', 'Power Calibration', 'NumberTitle', 'off', 'Position', [200 200 900 400]);
 
 subplot(1, 2, 1);
 validSample = T.power_at_sample_mW > 0;
-plot(T.power_setting_mW(validSample), T.power_at_sample_mW(validSample), 'w.-', 'MarkerSize', 10, 'LineWidth', 1);
-xlabel('Laser power setting (mW)'); ylabel('Power at sample (mW)');
+plot(T.power_setting_mW(validSample), irradiance_mW_mm2(validSample), 'w.-', 'MarkerSize', 10, 'LineWidth', 1);
+xlabel('Laser power setting (mW)'); ylabel('Power at sample (mW/mm^2)');
 title('Laser power vs power at sample');
 grid on;
 
 subplot(1, 2, 2);
-validMask = T.power_at_sample_mW > 0 & intensities > 0 & ~saturated;
-plot(T.power_at_sample_mW(validMask), intensities(validMask), 'w.-', 'MarkerSize', 10, 'LineWidth', 1);
+onMask    = false(nSteps, 1);
+onMask(onsetIdx:end) = true;
+validMask = T.power_at_sample_mW > 0 & intensities > 0 & ~saturated & onMask;
+plot(irradiance_mW_mm2(validMask), intensities(validMask), 'w.-', 'MarkerSize', 10, 'LineWidth', 1);
 hold on;
-if any(saturated & validMask)
-    plot(T.power_at_sample_mW(saturated & validMask), intensities(saturated & validMask), 'r.', 'MarkerSize', 14);
+if any(saturated & onMask)
+    plot(irradiance_mW_mm2(saturated & onMask), intensities(saturated & onMask), 'r.', 'MarkerSize', 14);
 end
-xlabel('Power at sample (mW)'); ylabel('Peak intensity (counts)');
-title('Power at sample vs camera intensity');
+xlabel('Power at sample (mW/mm^2)'); ylabel('Mean intensity (counts)');
+title('Power at sample vs camera intensity (laser on)');
 grid on;
 
 matPath = fullfile(outDir, ['power_' stamp '.mat']);
@@ -94,6 +138,7 @@ matPath = fullfile(outDir, ['power_' stamp '.mat']);
 results.power_setting_mW   = T.power_setting_mW;
 results.power_at_sample_mW = T.power_at_sample_mW;
 results.intensity_at_camera = intensities;
+results.illumMask            = illumMask;
 results.saturated           = saturated;
 results.timestamp           = stamp;
 save(matPath, 'results');

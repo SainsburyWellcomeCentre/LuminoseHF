@@ -14,7 +14,7 @@
 %% -------------------------------------------------------------------------
 %  CONFIGURATION — edit these before running
 %% -------------------------------------------------------------------------
-META_FILE       = 'left_meta.mat';
+META_FILE       = 'designed_opto_r1_20260518_185815_meta.mat';
                   % Full path to a _meta.mat file, OR leave '' to auto-pick:
 PATTERN_TYPE    = 'CSminus';   % used only when META_FILE is empty
 ILLUMINATION_US = 500;        % µs on-time per frame; increase for brighter

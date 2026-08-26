@@ -10,7 +10,7 @@ paths:
 bpod:
   protocols: "C:\\Users\\harrislab\\luminose_hf\\protocols"
   protocolFile: "luminose_hf_goNogo.m"
-  dataPath: "C:\\Users\\harrislab\\luminoseData"
+  dataPath: "C:\\Users\\harrislab\\luminoseData\\rawdata"
     
 # Olfactometer configuration
 olfactometer:
@@ -56,11 +56,16 @@ olfactometer:
 dmd:
   testImagePath: "C:\\Users\\harrislab\\Documents\\DLPimages\\bullseye1920x1080_inv.bmp"
   # projected width of the full 1024-DMD-px field at the sample plane (mm)
-  # derived 20260701 from: 1mm = 634 camera-px (measured) combined with the
-  # checkerboard_20260701_142601.mat DMD-to-camera ratio (avg row/col
-  # 1.8145 camera-px/DMD-px) -> 2.8620 um/DMD-px * 1024 px = 2.9307mm
-  # (replaces old 3.15mm placeholder — see calibrate_xy_checkerboard.m)
-  projectedDMDlength: 2.9307
+  # derived 20260825 from checkerboard_20260825_195006.mat
+  # (calibrate_xy_checkerboard.m) averaged camera-px-per-DMD-px across the
+  # grid-row (1.3657) and grid-col (1.3642) directions — anisotropy 1.001x,
+  # so effectively isotropic -> 1.3649 px/DMD-px, combined with the
+  # unchanged camera.effectivePixelSize_um (1.5773 um/px, camera imaging
+  # path — unaffected by DMD projection magnification) ->
+  # 1.5773 um/px * 1.3649 px/DMD-px * 1024 DMD-px = 2.2046mm
+  # (replaces 2.1041mm, derived 20260824 via calibrate_xy_white.m bounding-box
+  # method — the two methods disagree by ~4.8%; worth rechecking if it recurs)
+  projectedDMDlength: 2.2046
   spotSide: 0.1
   patternsFolder: "C:\\Users\\harrislab\\luminose_hf\\dmd\\Patterns"
 
