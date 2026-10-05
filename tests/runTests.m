@@ -7,13 +7,16 @@ function results = runTests()
 %   From WSL:     "/mnt/c/Program Files/MATLAB/R2025b/bin/matlab.exe" -batch "cd tests; runTests"
 %
 %   Nothing here opens a device, a COM port or Bpod: the tests exercise the
-%   shared package (+lhf) with made-up trial data, draw plots in invisible
-%   figures and write reports to a temporary folder. Errors if any test
+%   shared package (+lhf) with made-up trial data, use the device packages'
+%   simulated devices (obis.transport.SimulatedTransport), draw plots in
+%   invisible figures and write reports to a temporary folder. Errors if any test
 %   fails, so a -batch run exits non-zero.
 
     here = fileparts(mfilename('fullpath'));
     root = fileparts(here);
-    addpath(root, here);
+    addpath(root, here, fullfile(root, 'laser'));  % laser/: the irradiance calibration
+    config = LuminoseConstants.readConfig();
+    LuminoseConstants.addDevicePackages(config.paths.matlabFolder);  % obis, ... (simulated only)
 
     results = runtests(here);
     disp(table(results));

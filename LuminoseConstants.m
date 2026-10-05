@@ -23,12 +23,59 @@ classdef LuminoseConstants < handle
         camera struct
         zaber struct
         configFile string
+        % packageVersions  version() of each device package (addDevicePackages)
+        packageVersions struct
     end
 
     methods (Static)
         function file = defaultConfigFile()
             % defaultConfigFile  luminose_config.yaml in the folder holding this class
             file = string(fullfile(fileparts(mfilename('fullpath')), 'luminose_config.yaml'));
+        end
+
+        function config = readConfig(file)
+            % readConfig  The YAML file as a struct, with no checks and no path changes
+            if nargin < 1
+                file = LuminoseConstants.defaultConfigFile();
+            end
+            config = LuminoseConstants.loadYAML(file);
+        end
+
+        function packages = devicePackages()
+            % devicePackages  The device repos luminose_hf uses: package, repo folder, URL
+            packages = struct( ...
+                'package', {'obis', 'zaberstage', 'hamacam', 'olfactometer'}, ...
+                'repo',    {'OBISLaser', 'ZaberStage', 'HamamatsuCam', 'Olfactometer'}, ...
+                'url',     {'https://github.com/SainsburyWellcomeCentre/OBISLaser', ...
+                            'https://github.com/SainsburyWellcomeCentre/ZaberStage', ...
+                            'https://github.com/SainsburyWellcomeCentre/HamamatsuCam', ...
+                            'https://github.com/SainsburyWellcomeCentre/Olfactometer'});
+        end
+
+        function versions = addDevicePackages(matlabFolder)
+            % addDevicePackages  Put each device repo's root (only) on the path
+            %
+            %   versions = LuminoseConstants.addDevicePackages(matlabFolder)
+            %
+            %   Each repo in devicePackages() must be in matlabFolder. Its root is
+            %   added and any of its subfolders genpath put on the path are removed:
+            %   a repo's tests/ and examples/ hold names (LaserTest, run_tests) that
+            %   would shadow this repo's. Returns each package's version().
+            versions = struct();
+            entries = strsplit(path, pathsep);
+            for p = LuminoseConstants.devicePackages()
+                root = fullfile(char(matlabFolder), p.repo);
+                if ~isfolder(fullfile(root, ['+' p.package]))
+                    error('LuminoseConstants:MissingPackage', ...
+                        'Package %s not found in %s: clone %s there.', p.package, root, p.url);
+                end
+                inside = entries(startsWith(entries, [root filesep], 'IgnoreCase', true));
+                if ~isempty(inside)
+                    rmpath(inside{:});
+                end
+                addpath(root);
+                versions.(p.package) = feval([p.package '.version']);
+            end
         end
     end
 
@@ -76,6 +123,7 @@ classdef LuminoseConstants < handle
 
             % Add key folders to path
             addpath(genpath(char(obj.f.luminose_hf)), genpath(char(obj.f.luminoseData)), genpath(char(obj.f.matlabFolder)));
+            obj.packageVersions = LuminoseConstants.addDevicePackages(obj.f.matlabFolder);
             savepath();
         end
         
@@ -92,6 +140,7 @@ classdef LuminoseConstants < handle
             config = struct();
             config.paths.parentFolder = char(obj.f.parentFolder);
             config.paths.matlabFolder = char(obj.f.matlabFolder);
+            config.paths.dataFolder = char(obj.f.luminoseData);
             config.bpod = obj.bpod;
             config.olfactometer = obj.olfactometer;
             config.dmd = obj.dmd;
@@ -102,8 +151,8 @@ classdef LuminoseConstants < handle
         end
     end
 
-    methods (Access = private)
-        function config = loadYAML(obj, filename)
+    methods (Static, Access = private)
+        function config = loadYAML(filename)
             % loadYAML  Load YAML configuration file
             %
             %   Requires: YAML toolbox or ReadYaml function
@@ -118,11 +167,14 @@ classdef LuminoseConstants < handle
                     config = ReadYaml(filename);
                 catch
                     % Fallback: use basic YAML parsing
-                    config = obj.parseYAMLBasic(filename);
+                    config = LuminoseConstants.parseYAMLBasic(filename);
                 end
             end
         end
         
+    end
+
+    methods (Access = private)
         function saveYAML(obj, filename, data)
             % saveYAML  Save data to YAML file
             
@@ -142,7 +194,10 @@ classdef LuminoseConstants < handle
             end
         end
         
-        function config = parseYAMLBasic(obj, filename)
+    end
+
+    methods (Static, Access = private)
+        function config = parseYAMLBasic(filename)
             % parseYAMLBasic  Basic YAML parser (fallback)
             %
             %   This is a simple parser for basic YAML. For complex configs,
@@ -235,6 +290,9 @@ classdef LuminoseConstants < handle
             fclose(fid);
         end
         
+    end
+
+    methods (Access = private)
         function writeYAMLBasic(obj, filename, data)
             % writeYAMLBasic  Basic YAML writer (fallback)
             
@@ -288,9 +346,9 @@ classdef LuminoseConstants < handle
             end
             
             % Validate paths
-            if ~isfield(config.paths, 'parentFolder') || ~isfield(config.paths, 'matlabFolder')
+            if ~all(isfield(config.paths, {'parentFolder', 'matlabFolder', 'dataFolder'}))
                 error('LuminoseConstants:MissingPaths', ...
-                    'Config file must specify both parentFolder and matlabFolder in paths section');
+                    'Config file must specify parentFolder, matlabFolder and dataFolder in paths section');
             end
         end
         
@@ -299,8 +357,8 @@ classdef LuminoseConstants < handle
             
             f = struct();
             f.parentFolder = string(config.paths.parentFolder);
-            f.luminose_hf = fullfile(f.parentFolder, "luminose_hf");
-            f.luminoseData = fullfile(f.parentFolder, "luminoseData");
+            f.luminose_hf = string(fileparts(mfilename('fullpath')));  % this repository, wherever it is
+            f.luminoseData = string(config.paths.dataFolder);
             f.matlabFolder = string(config.paths.matlabFolder);
             obj.f = f;
         end

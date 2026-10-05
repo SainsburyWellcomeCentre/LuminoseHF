@@ -1,6 +1,8 @@
 classdef OdourDeliveryTest < matlab.unittest.TestCase
 % Which valves an odour soft code delivers: lhf.olf.resolve, lhf.olf.drawRows,
-% and how long a row plays: lhf.olf.sequenceDuration (no hardware).
+% how long a row plays: lhf.olf.sequenceDuration, and the delivery itself on the
+% olfactometer package's simulated valves, in process: lhf.olf.deliver, lhf.olf.close
+% (no hardware, no pool).
 
     properties
         GUI
@@ -76,5 +78,76 @@ classdef OdourDeliveryTest < matlab.unittest.TestCase
             tc.verifyEmpty(v);
             tc.verifyEmpty(type);
         end
+
+        function aSoftCodeDeliversAndRecordsTheDutyUsed(tc)
+            delivery = tc.fakeSessionDelivery();
+            global BpodSystem %#ok<GVMIS>
+            S.GUI = tc.GUI;
+            S.GUI.valves_cue = [3 4];
+            S.GUI.dutyCycles_cue = [0 0.5];   % 0: the bottle's own duty
+            S = lhf.olf.deliver(1, S, lhf.protocolInfo('goNogo'), []);
+            tc.verifyEqual(S.GUI.delivered_odours.cue, [3 4]);
+            bottle = delivery.Bottles.dutyCycles(3);
+            tc.verifyEqual(S.GUI.delivered_dutyCycles.cue, [bottle 0.5]);
+            tc.verifyNumElements(delivery.Deliveries, 1);
+            tc.verifyFalse(isfile([BpodSystem.Path.CurrentDataFile '_olfactometer_errors.txt']));
+        end
+
+        function aBadRowIsLoggedNotThrown(tc)
+            tc.fakeSessionDelivery();
+            global BpodSystem %#ok<GVMIS>
+            S.GUI = tc.GUI;
+            S.GUI.valves_cue = 9;            % clean air: refused
+            S.GUI.dutyCycles_cue = 1;
+            S = lhf.olf.deliver(1, S, lhf.protocolInfo('goNogo'), []);
+            tc.verifyFalse(isfield(S.GUI, 'delivered_odours'));
+            text = fileread([BpodSystem.Path.CurrentDataFile '_olfactometer_errors.txt']);
+            tc.verifySubstring(text, 'notOdourValve');
+        end
+
+        function closeKeepsTheDeliveries(tc)
+            tc.fakeSessionDelivery();
+            global BpodSystem %#ok<GVMIS>
+            S.GUI = tc.GUI;
+            S.GUI.valves_cue = 3;
+            S.GUI.dutyCycles_cue = 1;
+            lhf.olf.deliver(1, S, lhf.protocolInfo('goNogo'), []);
+            lhf.olf.close();
+            tc.verifyNumElements(BpodSystem.Data.Olfactometer.Deliveries, 1);
+            tc.verifyFalse(isfield(BpodSystem.PluginObjects, 'Olfactometer'));
+            lhf.olf.close();   % nothing open: does nothing
+        end
     end
+
+    methods (Access = private)
+        function delivery = fakeSessionDelivery(tc)
+            % An in-process, simulated delivery with the rig's config and bottle tables,
+            % where lhf.olf.startWorker would put it, and a data file in a temporary folder.
+            global BpodSystem %#ok<GVMIS>
+            saved = BpodSystem;
+            tc.addTeardown(@() restoreBpod(saved));
+            folder = tempname;
+            mkdir(folder);
+            tc.addTeardown(@() rmdir(folder, 's'));
+            root = fileparts(fileparts(mfilename('fullpath')));
+            config = LuminoseConstants.readConfig();
+            olf = config.olfactometer;
+            olf.odourBottlesFile = fullfile(root, 'olfactometer', 'odour_bottles.tsv');
+            olf.odourChemicalsFile = fullfile(root, 'olfactometer', 'odour_chemicals.tsv');
+            bottles = olfactometer.Bottles.fromTsv(olf.odourBottlesFile, olf.odourChemicalsFile);
+            delivery = olfactometer.AsyncDelivery(olf, 'Bottles', bottles, 'InProcess', true, ...
+                'Simulated', true);
+            delivery.start();
+            tc.addTeardown(@() olfactometer.internal.serve('release'));
+            BpodSystem = struct('PluginObjects', struct('Olfactometer', delivery), ...
+                'Data', struct(), 'Path', struct('CurrentDataFile', fullfile(folder, 'session')));
+        end
+    end
+end
+
+
+function restoreBpod(saved)
+% Puts back the BpodSystem global a test replaced.
+global BpodSystem %#ok<GVMIS>
+BpodSystem = saved;
 end

@@ -41,7 +41,7 @@ All rig-specific settings live in `luminose_config.yaml`. Required top-level sec
 
 ## Docs and tests
 
-- `docs/architecture.md` — the session, the shared package, and the design decisions (D1–D10). Read it before changing the trial loop, trial selection, scoring, plots, odour delivery or settings loading.
+- `docs/architecture.md` — the session, the shared package, and the design decisions (D1–D16). Read it before changing the trial loop, trial selection, scoring, plots, odour delivery or settings loading.
 - `docs/data-format.md` — every field and file a session writes, the scoring rules, the settings history.
 - `docs/testing.md` — the hardware-free test suite: `cd tests; runTests` in MATLAB, or from WSL `"/mnt/c/Program Files/MATLAB/R2025b/bin/matlab.exe" -batch "cd tests; runTests"` (if that prints `Exec format error`, WSL interop needs re-registering; see the doc).
 
@@ -50,10 +50,16 @@ Update the affected doc in the same change, and add a test for anything added to
 ## Architecture
 
 ### Configuration layer
-- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.bonsai` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol.
+- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.bonsai` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol. Data live in `paths.dataFolder` (`D:\luminoseData` since 2026-10-05).
+
+### Device packages (separate repos in `paths.matlabFolder`, D16)
+- `obis` ([OBISLaser](https://github.com/SainsburyWellcomeCentre/OBISLaser)) — the OBIS laser (`obis.Laser`, `obis.Calibration`, a simulated laser for tests). Used by `lhf.laser.*`, `laser/irradianceCalibration.m` and `calibration/calibrate_power.m`.
+- `zaberstage` ([ZaberStage](https://github.com/SainsburyWellcomeCentre/ZaberStage)) — the Zaber Z stage (`zaberstage.Stage`, moves refused outside `LimitsUm`). Built by `calibration/rigStage.m`.
+- `olfactometer` ([Olfactometer](https://github.com/SainsburyWellcomeCentre/Olfactometer)) — the valves (`olfactometer.Olfactometer`, sequences sample for sample as before; `olfactometer.AsyncDelivery`, the one warmed-up worker; `olfactometer.Bottles`). Used by `lhf.olf.*` and `olfactometer/test_olfactometer.m`; the rig's bottle tables stay in `olfactometer/`.
+- `hamacam` ([HamamatsuCam](https://github.com/SainsburyWellcomeCentre/HamamatsuCam)) — the Hamamatsu camera (`hamacam.Camera`, averaged uint16 frames). Built by `calibration/rigCamera.m`.
+- `LuminoseConstants.addDevicePackages` puts each repo's root on the path and records versions in `luminose.packageVersions`; a missing repo stops with its URL. Driver code that is not rig- or protocol-specific belongs in the device's repo, not here.
 
 ### Hardware models
-- `olfactometer/OlfactometerModel.m` — manages NI-DAQ sessions, generates per-odour valve timing matrices, and sequences delivery. Constructed with `OlfactometerModel(luminose.olfactometer, triggered)`.
 - `dmd/DMDPatternPlayer.m` (on `DMDController`) — uploads each trial's DMD sequences in the prepare window, never in a soft-code callback. Protocols call `dmd_hf_<name>('prepare', dmdSoftCodes(sma))` after `PrepareStateMachine`, `dmd_hf_<name>('advance')` after `getTrialData`, and `dmd_hf_<name>('close')` in `cleanup`; the soft code itself only starts projection. Fixed patterns are reused across trials; patterns with random spots are rebuilt once per trial. The sleep protocol still runs its DMD handler through `parfeval` and does not use the player.
 
 ### Shared package (`+lhf`)
@@ -64,7 +70,7 @@ Code the protocols share lives in the `lhf` package (not `luminose`: the global 
 - `lhf.nextTrialType` + `lhf.trialPolicy` + `lhf.responseBias` — trial selection. No repeat-on-error: the next trial is prepared before the running one's outcome is known.
 - `lhf.random` — the session's seeded stream (`Data.RandomSeed`); draw random numbers from it.
 - `lhf.plot.*` — the live-plot window and panels (powercal adds `lhf.plot.power`, performance vs irradiance); state in each axes' `UserData`, newest trial only, no `drawnow`.
-- `lhf.olf.*` — odour delivery on one warmed-up worker (`startWorker` before the GUI, its warm-up awaited by `waitWorker` after START, `deliver` from the soft-code handler).
+- `lhf.olf.*` — odour delivery on one warmed-up worker through `olfactometer.AsyncDelivery` (`startWorker` before the GUI, its warm-up awaited by `waitWorker` after START, `deliver` from the soft-code handler, `close` in cleanup).
 - `lhf.mergeSettings` / `lhf.settingsHistory` — loading saved settings; rename or retire a setting there.
 - `lhf.patternFolder` / `lhf.patternFileType` / `lhf.patternDesign` — the one folder designs live in, the name a type's files carry (a protocol can save a type under its own name via `luminose.dmd.typeFileNames`, as powercal does: CS- as `designed_powercal_*`, CS+ as `designed_powercalCSplus_*`) and one row's design; a row with no design shows nothing and sends no soft code.
 - `lhf.stimDuration` — how long a cue or stimulus lasts (there is no duration setting): a pattern its design (`lhf.patternDuration`), an odour its sequence (`lhf.olf.sequenceDuration`, rows drawn at prepare by `lhf.olf.drawRows` into `NextOdourRow`, handed to the soft-code handler as `SelectedOdourRow` after `getTrialData`), light and sound the `Duration (s)` in their own panel.
@@ -97,7 +103,7 @@ Reusable widgets used by the protocols' parameter screens:
 - `StartButtonPressed.m` — locks GUI controls and sets the `StartPressed` appdata flag
 
 ### Global variables
-Protocols use MATLAB globals: `BpodSystem` (Bpod), `S` (GUI parameter struct), `luminose` (LuminoseConstants instance). `olfModel` (OlfactometerModel) lives on the olfactometer worker (`lhf.olf.worker`).
+Protocols use MATLAB globals: `BpodSystem` (Bpod), `S` (GUI parameter struct), `luminose` (LuminoseConstants instance). The olfactometer lives on its worker (`olfactometer.internal.serve`); the client side is `BpodSystem.PluginObjects.Olfactometer`.
 
 ## Conventions
 

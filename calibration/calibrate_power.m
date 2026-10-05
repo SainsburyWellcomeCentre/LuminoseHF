@@ -13,8 +13,11 @@
 %   A power-vs-intensity plot is shown on completion.
 
 luminose = LuminoseConstants();
-laser    = LaserModel(luminose.laser);
-cam      = CameraModel(luminose.camera);
+laser    = obis.Laser('Port', char(luminose.laser.port), 'BaudRate', luminose.laser.baudRate, ...
+    'MaxPowermW', luminose.laser.maxPower_mW);
+laser.connect();
+laser.setMode('CWP');
+cam      = rigCamera(luminose);
 
 dmd = DMDController.DMD();
 dmd.connect(0);

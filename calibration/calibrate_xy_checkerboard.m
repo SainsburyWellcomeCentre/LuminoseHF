@@ -29,7 +29,7 @@ imgPath = fullfile(char(luminose.f.luminoseData), 'calibration', 'checkerboard.t
 if ~exist(imgPath, 'file')
     fprintf('%s not found — displaying checkerboard on DMD and capturing from camera.\n', imgPath);
 
-    cam = CameraModel(luminose.camera);
+    cam = rigCamera(luminose);
     dmd = DMDController.DMD();
     dmd.connect(0);
     info = dmd.getInfo();

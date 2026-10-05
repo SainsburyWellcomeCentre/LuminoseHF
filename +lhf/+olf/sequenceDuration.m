@@ -5,7 +5,8 @@ function seconds = sequenceDuration(valves, olfConfig)
 %
 %   One slot per odour (the row's valves > 0; the GUI pads rows with 0) of
 %   preSequenceTime + pulseTime + postSequenceTime, as
-%   OlfactometerModel.generate_valve_pattern lays them out.
+%   olfactometer.Olfactometer.pattern lays them out (its durationS, without
+%   making an Olfactometer in the trial loop).
 
     slot = olfConfig.preSequenceTime + olfConfig.pulseTime + olfConfig.postSequenceTime;
     seconds = nnz(valves > 0) * slot;

@@ -12,7 +12,7 @@ Beside Bpod's data file `<subject>_luminose_hf_<protocol>_<date>_<time>.mat`:
 | `<name>_report.md` | `lhf.report.write` (behaviour protocols) | session, performance per trial type, water, response time, settings changed, settings-file notes |
 | `<name>_summary.png` | `lhf.report.write` (behaviour protocols) | the live panels redrawn over the whole session |
 | `<name>_laser_log.txt` | `lhf.laser.onSoftCode`, with Laser control ticked | every laser power set, and any error |
-| `<name>_olfactometer_errors.txt` | `lhf.olf.worker`, only if an odour delivery failed | one line per failure |
+| `<name>_olfactometer_errors.txt` | `lhf.olf.deliver` (a refused request) and the olfactometer worker (a failed sequence, e.g. no trigger), only if one failed | one line per failure |
 | `<subject>_..._log.txt` | `diary` | the MATLAB console for the session |
 
 ## Per trial (`Data`, indexed by trial)
@@ -45,7 +45,9 @@ Until 2026-09-29 (files without `RandomSeed`), 2AFC and MTS scored a trial with 
 | `SettingsNotes` | what `lhf.mergeSettings` changed when loading the settings file (cell of text; empty for none) |
 | `GitHash` | the repository commit the session ran |
 | `GUIMeta` | the settings' labels and styles |
-| `luminose` | the `LuminoseConstants` object |
+| `luminose` | the `LuminoseConstants` object; `luminose.packageVersions` holds each device package's version (D16) |
+| `Olfactometer` | the session's `olfactometer.AsyncDelivery.record()`, kept by `lhf.olf.close`: every delivery (time, valves, duty sent) and every worker failure |
+| `Laser` | with Laser control ticked: the laser's `obis.Laser.record()`, kept by `lhf.laser.close` (identity, limits, mode, every command with its time, reply and latency) |
 
 ## Settings file (`S`, Bpod's `ProtocolSettings`)
 

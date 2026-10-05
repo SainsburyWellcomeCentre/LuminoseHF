@@ -15,12 +15,14 @@ fprintf('Z scan: %.2f mm to %.2f mm in %d um steps (%d positions)\n', ...
     (FOCUS_UM - RANGE_UM)/1e3, (FOCUS_UM + RANGE_UM)/1e3, zStep_um, nSteps);
 
 %% Connect hardware
-cam   = CameraModel(luminose.camera);
+cam   = rigCamera(luminose);
 dmd   = DMDController.DMD();
 dmd.connect(0);
-zaber = ZaberModel(luminose.zaber);
+zaber = rigStage(luminose);
 
-startPos_um = zaber.getPosition_um();
+startPos_um = zaber.positionUm();
+% Refuse any move outside the scan and the way back to the start
+zaber.LimitsUm = [min([zPositions startPos_um]) max([zPositions startPos_um])];
 fprintf('Stage start position: %.3f mm\n', startPos_um / 1e3);
 
 %% Display single central DMD pixel

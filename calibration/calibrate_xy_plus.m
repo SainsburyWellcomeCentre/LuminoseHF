@@ -4,7 +4,7 @@
 
 luminose = LuminoseConstants();
 
-cam = CameraModel(luminose.camera);
+cam = rigCamera(luminose);
 dmd = DMDController.DMD();
 dmd.connect(0);
 

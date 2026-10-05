@@ -37,6 +37,27 @@ classdef RepositoryTest < matlab.unittest.TestCase
             end
         end
 
+        function removedDeviceModelsAreNotUsed(tc)
+            % Device drivers moved to their own repositories (docs/architecture.md, D16)
+            r = RepositoryTest.root();
+            listing = dir(fullfile(r, '**', '*.m'));
+            listing = listing(~contains({listing.folder}, 'bpod_examples'));
+            for k = 1:numel(listing)
+                file = fullfile(listing(k).folder, listing(k).name);
+                if endsWith(file, 'RepositoryTest.m'), continue; end
+                found = regexp(fileread(file), '\<(LaserModel|CameraModel|ZaberModel|OlfactometerModel)\(|lhf\.olf\.worker', ...
+                    'match', 'once');
+                tc.verifyEmpty(found, sprintf('%s uses %s', file, found));
+            end
+        end
+
+        function devicePackagesAreFound(tc)
+            config = LuminoseConstants.readConfig();
+            versions = LuminoseConstants.addDevicePackages(config.paths.matlabFolder);
+            tc.verifyEqual(sort(fieldnames(versions))', ...
+                sort({LuminoseConstants.devicePackages().package}));
+        end
+
         function repeatOnErrorIsGone(tc)
             for f = RepositoryTest.codeFiles()'
                 if contains(f{1}, [filesep 'tests' filesep]) || contains(f{1}, 'settingsHistory'), continue; end

@@ -3,7 +3,7 @@ function luminose_hf_powercal
     clc;
     warning('off', 'MATLAB:HandleGraphics:ObsoleteProperty:JavaFrame');
 
-    global BpodSystem S luminose olfModel sniffDetector
+    global BpodSystem S luminose sniffDetector
     luminose = LuminoseConstants();
     % powercal keeps its own CS+ and CS- designs in the shared folder, saved
     % as designed_powercalCSplus_* and designed_powercal_* so goNogo's
@@ -518,6 +518,7 @@ function cleanup()
     dmd_hf_powercal('close');
     clear dmd_hf_powercal;
     lhf.laser.close();  % emission off, port freed (nothing to do with Laser control off)
+    lhf.olf.close();  % deliveries kept in Data.Olfactometer; the worker stays warm
     BpodSystem.Data.luminose = luminose;
     BpodSystem.Data.GUIMeta = S.GUIMeta;
     BpodSystem.ProtocolSettings = S;

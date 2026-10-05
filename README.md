@@ -15,11 +15,12 @@ Install [git](https://git-scm.com/downloads) and [MATLAB](https://uk.mathworks.c
 
 1. [Bpod Gen2](https://github.com/sanworks/Bpod_Gen2)
 2. [DMDController](https://github.com/SainsburyWellcomeCentre/DMDController) for DMD control
-3. [Bonsai](https://bonsai-rx.org/docs/articles/installation.html) with the `PointGrey`, `Scripting.Expressions`, `Reactive`, `Dsp`, and `Vision` packages for synchronized camera acquisition
+3. [OBISLaser](https://github.com/SainsburyWellcomeCentre/OBISLaser) (package `obis`) for the OBIS laser, [ZaberStage](https://github.com/SainsburyWellcomeCentre/ZaberStage) (`zaberstage`) for the Z stage and [HamamatsuCam](https://github.com/SainsburyWellcomeCentre/HamamatsuCam) (`hamacam`) for the calibration camera, [Olfactometer](https://github.com/SainsburyWellcomeCentre/Olfactometer) (`olfactometer`) for the valves
+4. [Bonsai](https://bonsai-rx.org/docs/articles/installation.html) with the `PointGrey`, `Scripting.Expressions`, `Reactive`, `Dsp`, and `Vision` packages for synchronized camera acquisition
 
 ### Setup
 
-1. Install dependencies in a parent directory on your local machine.
+1. Clone Bpod_Gen2, DMDController, OBISLaser, ZaberStage, HamamatsuCam and Olfactometer into the folder named by `paths.matlabFolder` in `luminose_config.yaml` (`C:\Users\harrislab\MATLAB` on the rig). `LuminoseConstants` puts each device repo's root on the path and stops with the URL to clone if one is missing.
 2. Clone this repository:
 
 ```bash
@@ -52,7 +53,7 @@ Current protocol families include:
 - `LuminoseConstants.m`: central configuration loader and path setup
 - `luminose_config.yaml`: rig-specific configuration
 - `dmd/`: DMD control, pattern generation, and image export helpers
-- `olfactometer/`: NI-DAQ based odour sequencing and bottle metadata
+- `olfactometer/`: the rig's bottle and chemical tables, sniff detection, a valve check script (the driver is the Olfactometer repo)
 - `protocols/`: behavioural tasks and their `HelperFiles`
 - `gui/`: shared GUI utilities for start control, odour selection, and trial/opto visualizations
 - `+lhf/`: code the protocols share: scoring, trial selection, live plots, odour delivery, settings loading, the end-of-session report
@@ -65,6 +66,7 @@ Beside the data file, each behaviour session writes `<name>_report.md` (performa
 
 ## Recent behaviour changes
 
+- 2026-10-05: the laser, olfactometer, Zaber stage and Hamamatsu camera drivers moved to their own repositories (OBISLaser, Olfactometer, ZaberStage, HamamatsuCam; docs/architecture.md, D16); `OlfactometerModel`, `LaserModel`, `CameraModel` and `ZaberModel` are gone
 - `dmd/DMDmodel.m` now exports only unique pattern frames in `save_images`, writing deduplicated BMPs for test stacks
 - `dmd/test_dmd.m` now exercises pattern generation plus BMP export using the `testimages` prefix
 - `olfactometer/OlfactometerModel.m` now builds valve sequences in per-odour time slots, includes safer index bounds, and returns early for empty valve selections

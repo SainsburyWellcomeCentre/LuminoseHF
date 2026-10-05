@@ -17,7 +17,7 @@
 %   luminoseData/calibration/fiducial.mat before running.
 
 luminose = LuminoseConstants();
-cam      = CameraModel(luminose.camera);
+cam      = rigCamera(luminose);
 dmd      = DMDController.DMD();
 dmd.connect(0);
 

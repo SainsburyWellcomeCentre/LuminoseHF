@@ -3,7 +3,7 @@ function luminose_hf_goNogo
     clc;
     warning('off', 'MATLAB:HandleGraphics:ObsoleteProperty:JavaFrame');
 
-    global BpodSystem S luminose olfModel sniffDetector
+    global BpodSystem S luminose sniffDetector
     luminose = LuminoseConstants();
     beep('off'); % native matlab error sounds OFF
     BpodSystem.SoftCodeHandlerFunction = 'SoftCodeHandler_luminose_hf_goNogo';
@@ -502,6 +502,7 @@ function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
     dmd_hf_goNogo('close');
     lhf.laser.close();  % emission off, port freed (nothing to do with Laser control off)
+    lhf.olf.close();  % deliveries kept in Data.Olfactometer; the worker stays warm
     clear dmd_hf_goNogo;
     BpodSystem.Data.luminose = luminose;
     BpodSystem.Data.GUIMeta = S.GUIMeta;
