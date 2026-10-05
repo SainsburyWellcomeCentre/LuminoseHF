@@ -18,7 +18,6 @@ classdef LuminoseConstants < handle
         bpod struct
         olfactometer struct
         dmd struct
-        bonsai struct
         laser struct
         camera struct
         zaber struct
@@ -45,11 +44,11 @@ classdef LuminoseConstants < handle
             % devicePackages  The device repos LuminoseHF uses: package, repo folder, URL
             packages = struct( ...
                 'package', {'obis', 'zaberstage', 'hamacam', 'olfactometer'}, ...
-                'repo',    {'OBISLaser', 'ZaberStage', 'HamamatsuCam', 'Olfactometer'}, ...
+                'repo',    {'OBISLaser', 'ZaberStage', 'HamamatsuCam', 'NIDAQOlfactometer'}, ...
                 'url',     {'https://github.com/SainsburyWellcomeCentre/OBISLaser', ...
                             'https://github.com/SainsburyWellcomeCentre/ZaberStage', ...
                             'https://github.com/SainsburyWellcomeCentre/HamamatsuCam', ...
-                            'https://github.com/SainsburyWellcomeCentre/Olfactometer'});
+                            'https://github.com/SainsburyWellcomeCentre/NIDAQOlfactometer'});
         end
 
         function versions = addDevicePackages(matlabFolder)
@@ -116,7 +115,6 @@ classdef LuminoseConstants < handle
             obj.loadBpodConfig(config);
             obj.loadOlfactometerConfig(config);
             obj.loadDMDConfig(config);
-            obj.loadBonsaiConfig(config);
             obj.loadLaserConfig(config);
             obj.loadCameraConfig(config);
             obj.loadZaberConfig(config);
@@ -144,7 +142,6 @@ classdef LuminoseConstants < handle
             config.bpod = obj.bpod;
             config.olfactometer = obj.olfactometer;
             config.dmd = obj.dmd;
-            config.bonsai = obj.bonsai;
             
             obj.saveYAML(filename, config);
             fprintf('Configuration saved to: %s\n', filename);
@@ -337,7 +334,7 @@ classdef LuminoseConstants < handle
         function validateConfig(obj, config)
             % validateConfig  Ensure all required fields are present
             
-            required = {'paths', 'bpod', 'olfactometer', 'dmd', 'bonsai', 'laser', 'camera', 'zaber'};
+            required = {'paths', 'bpod', 'olfactometer', 'dmd', 'laser', 'camera', 'zaber'};
             for i = 1:length(required)
                 if ~isfield(config, required{i})
                     error('LuminoseConstants:MissingSection', ...
@@ -426,18 +423,6 @@ classdef LuminoseConstants < handle
             );
         end
         
-        function loadBonsaiConfig(obj, config)
-            % loadBonsaiConfig  Load Bonsai configuration from YAML
-
-            cfg = config.bonsai;
-
-            obj.bonsai = struct( ...
-                'launch_bonsai', cfg.launch_bonsai, ...
-                'exePath', string(cfg.exePath), ...
-                'workflowPath', string(cfg.workflowPath) ...
-            );
-        end
-
         function loadLaserConfig(obj, config)
             cfg = config.laser;
             obj.laser = struct( ...
@@ -472,6 +457,34 @@ classdef LuminoseConstants < handle
                 'zRange_um', cfg.zRange_um, ...
                 'zStep_um',  cfg.zStep_um ...
             );
+            % Optional: the X, Y and Z axes for automatic alignment (rigStages), and its limits
+            obj.zaber.axes = struct();
+            if isfield(cfg, 'axes') && isstruct(cfg.axes)
+                for name = {'x', 'y', 'z'}
+                    if isfield(cfg.axes, name{1})
+                        a = cfg.axes.(name{1});
+                        obj.zaber.axes.(name{1}) = struct('device', double(a.device), 'axis', double(a.axis));
+                    end
+                end
+            end
+            obj.zaber.alignment = LuminoseConstants.alignmentDefaults();
+            if isfield(cfg, 'alignment') && isstruct(cfg.alignment)
+                for name = fieldnames(cfg.alignment)'
+                    if ~isfield(obj.zaber.alignment, name{1})
+                        error('LuminoseConstants:badConfig', 'Unknown zaber.alignment setting "%s".', name{1});
+                    end
+                    obj.zaber.alignment.(name{1}) = double(cfg.alignment.(name{1}));
+                end
+            end
+        end
+    end
+
+    methods (Static)
+        function a = alignmentDefaults()
+            % alignmentDefaults  Automatic alignment's limits when the config sets none (lhf.cam.align)
+            a = struct('maxTravelXY_um', 1000, 'maxTravelZ_um', 200, 'maxStep_um', 500, ...
+                'tolerance_um', 2, 'maxIterations', 6, 'zSearch_um', 100, 'zStep_um', 10, ...
+                'rotationWarn_deg', 1, 'minPeak', 0.1);
         end
     end
 end

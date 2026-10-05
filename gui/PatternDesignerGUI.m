@@ -25,6 +25,10 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
 %   Clear All: remove all spots.
 %   Save Pattern: write to BpodSystem and disk. With no spots it saves a
 %     blank (after asking): nothing is shown and the stimulus lasts the Tick.
+%   Camera column (DesignerCameraPanel): the live Hamamatsu camera becomes
+%     the canvas, through the camera-DMD calibration, so spots are placed on
+%     the tissue; contrast by histogram; the DMD dark, all on or showing this
+%     pattern; and the animal's fiducial mark and reference frame.
 
     if nargin < 2 || isempty(rowIdx), rowIdx = 1; end
     if nargin < 3, preloadFromType = ''; end
@@ -109,12 +113,19 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     end
     gridSelected = spotsToGrid(spots);
 
+    % Camera as the canvas background (DesignerCameraPanel): the frame mapped
+    % onto the canvas, its display limits, and the image object showing it
+    camBg   = [];
+    camCLim = [];
+    hBg     = [];
+    camPanel = [];
+
     % ---------------------------------------------------------------
     % Figure  (760 px tall to fit all controls)
     % ---------------------------------------------------------------
     fig = figure('Name', sprintf('Pattern Designer — %s  (row %d)', patternType, rowIdx), ...
         'NumberTitle', 'off', 'MenuBar', 'none', 'Resize', 'off', ...
-        'Position', [80 80 1130 760], ...
+        'Position', [40 80 1450 760], ...
         'Color', [0.13 0.13 0.15], ...
         'CloseRequestFcn', @onClose);
 
@@ -320,6 +331,16 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         'BackgroundColor', [0.35 0.35 0.38], 'ForegroundColor', [0.9 0.9 0.9], ...
         'Callback', @(~,~) delete(fig));
 
+    % --- Camera column ---
+    try
+        camPanel = DesignerCameraPanel(fig, [PX+PW+25 0], ...
+            struct('axes', axCanvas, 'scale', SCALE, 'size', [CAN_H CAN_W], 'dmdSize', [DMD_H DMD_W]), ...
+            struct('setBackground', @setBackground, 'patternImage', @currentPatternImage, ...
+                'redraw', @refreshCanvas));
+    catch err
+        warning('PatternDesignerGUI:camera', 'No camera column: %s', err.message);
+    end
+
     % --- Initial state ---
     if ~isempty(loadedTickMs)
         set(hTickMs, 'String', num2str(loadedTickMs));
@@ -338,6 +359,7 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     function onCanvasClick(~, ~)
         pt   = axCanvas.CurrentPoint(1, 1:2);
         xDsp = pt(1);  yDsp = pt(2);
+        if ~isempty(camPanel) && camPanel.handleClick(xDsp, yDsp), return; end  % placing the fiducial mark
         xDMD = round(xDsp * SCALE);
         yDMD = round(yDsp * SCALE);
 
@@ -861,10 +883,32 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         end
     end
 
+    function setBackground(img, clim)
+        % The camera panel's frame under the spots ([] restores the noise image)
+        camBg   = img;
+        camCLim = clim;
+        if isempty(img) || isempty(hBg) || ~isvalid(hBg)
+            refreshCanvas();
+            return
+        end
+        set(hBg, 'CData', img);
+        set(axCanvas, 'CLim', clim);
+    end
+
+    function img = currentPatternImage()
+        img = lhf.spotImage(spots, r_px, [DMD_H DMD_W]);
+    end
+
     function refreshCanvas()
         cla(axCanvas);
-        hImg = imagesc(axCanvas, [0 CAN_W], [0 CAN_H], bgImage);
-        set(hImg, 'HitTest', 'off', 'PickableParts', 'none');
+        if isempty(camBg)
+            hBg = imagesc(axCanvas, [0 CAN_W], [0 CAN_H], bgImage);
+            set(axCanvas, 'CLimMode', 'auto');
+        else
+            hBg = imagesc(axCanvas, [0.5 CAN_W-0.5], [0.5 CAN_H-0.5], camBg);  % canvas pixel centres
+            set(axCanvas, 'CLim', camCLim);
+        end
+        set(hBg, 'HitTest', 'off', 'PickableParts', 'none');
         colormap(axCanvas, gray);
         set(axCanvas, 'YDir', 'reverse', 'XLim', [0 CAN_W], 'YLim', [0 CAN_H], ...
             'XColor', 'none', 'YColor', 'none');
@@ -874,6 +918,10 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
             drawGrid();
         else
             drawFreeSpots();
+        end
+        if ~isempty(camPanel) && isvalid(camPanel)
+            camPanel.drawOverlay(axCanvas);
+            camPanel.patternChanged();
         end
 
         set(axCanvas, 'NextPlot', 'replacechildren', 'ButtonDownFcn', @onCanvasClick);

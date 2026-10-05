@@ -15,6 +15,14 @@ Beside Bpod's data file `<subject>_luminose_hf_<protocol>_<date>_<time>.mat`:
 | `<name>_olfactometer_errors.txt` | `lhf.olf.deliver` (a refused request) and the olfactometer worker (a failed sequence, e.g. no trigger), only if one failed | one line per failure |
 | `<subject>_..._log.txt` | `diary` | the MATLAB console for the session |
 
+In `<dataFolder>/calibration/`, from the Pattern Designer's camera column (architecture D17):
+
+| File | Written by | What |
+|---|---|---|
+| `camera_dmd_<yyyymmdd_HHMMSS>.mat` (and `.png`) | `calibration/calibrate_camera_dmd.m` | `registration`: `A` (3x2, `[x y 1] * A` maps DMD px to camera px), `Ainv` (camera to DMD), `dmdXY`/`camXY` (the spots), `residualPx`, `rmsPx`, `timestamp`, `camSize`, `dmdSize`, `exposureMs`, `spotRadiusPx`; `background` (the frame with the DMD dark). The newest is used |
+| `stage_camera_<yyyymmdd_HHMMSS>.mat` | `calibration/calibrate_stage_camera.m` | `stageCamera`: `C` (2x2, camera px per stage um: `shift' = C * move'`), `Cinv`, `pxPerUm`, `rotationDeg` (stage X on the camera), `movesUm`/`shiftsPx` (the measurements), `residualPx`, `rmsPx`, `timestamp`, `startUm`. The newest is used |
+| `fiducials/<animal>.mat` | **Save fiducial** and **Align to reference** (`lhf.cam.saveFiducial`) | `fiducial`: `animal`, `reference` (the first entry saved, never replaced) and `sessions` (every entry, the reference first). An entry: `frame` (averaged camera frame, uint16), `xy` (the mark, camera px; empty for an aligned frame), `exposureMs`, `roi`, `registrationFile`, `stageUm` (`[x y z]`, when the stages were connected), `alignment` (`lhf.cam.align`'s result: `status`, `message`, `residualUm`, `rotationDeg`, `rotationWarning`, `peak`, `startUm`, `endUm`, `zFoundUm`, `moves`), `time`. Fields an older file lacks are filled empty |
+
 ## Per trial (`Data`, indexed by trial)
 
 | Field | Meaning |

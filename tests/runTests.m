@@ -14,7 +14,7 @@ function results = runTests()
 
     here = fileparts(mfilename('fullpath'));
     root = fileparts(here);
-    addpath(root, here, fullfile(root, 'laser'));  % laser/: the irradiance calibration
+    addpath(root, here, fullfile(root, 'laser'), fullfile(root, 'gui'), fullfile(root, 'calibration'));  % laser/: the irradiance calibration; gui/: the designer's camera column; calibration/: rigStages
     config = LuminoseConstants.readConfig();
     LuminoseConstants.addDevicePackages(config.paths.matlabFolder);  % obis, ... (simulated only)
 

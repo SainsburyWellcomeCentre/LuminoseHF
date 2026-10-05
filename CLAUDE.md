@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-MATLAB codebase for head-fixed mouse behavioural experiments combining Bpod task control, DMD-based patterned optogenetic stimulation, NI-DAQ odour delivery, and optional Bonsai video acquisition.
+MATLAB codebase for head-fixed mouse behavioural experiments combining Bpod task control, DMD-based patterned optogenetic stimulation and NI-DAQ odour delivery.
 
 ## Running experiments
 
@@ -35,7 +35,7 @@ dmdModel.save_images(img_stack, "path/to/testimages");
 
 ## Configuration
 
-All rig-specific settings live in `luminose_config.yaml`. Required top-level sections: `paths`, `bpod`, `olfactometer`, `dmd`, `bonsai`. `LuminoseConstants` validates these on construction and also adds key folders to the MATLAB path.
+All rig-specific settings live in `luminose_config.yaml`. Required top-level sections: `paths`, `bpod`, `olfactometer`, `dmd`, `laser`, `camera`, `zaber`. `LuminoseConstants` validates these on construction and also adds key folders to the MATLAB path.
 
 `LuminoseConstants()` reads `luminose_config.yaml` from the folder holding `LuminoseConstants.m` (`LuminoseConstants.defaultConfigFile()`), so the repo works wherever it is cloned; the paths inside the YAML are the rig's.
 
@@ -50,12 +50,12 @@ Update the affected doc in the same change, and add a test for anything added to
 ## Architecture
 
 ### Configuration layer
-- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.bonsai` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol. Data live in `paths.dataFolder` (`D:\luminoseData` since 2026-10-05).
+- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.laser`, `.camera`, `.zaber` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol. Data live in `paths.dataFolder` (`D:\luminoseData` since 2026-10-05).
 
 ### Device packages (separate repos in `paths.matlabFolder`, D16)
 - `obis` ([OBISLaser](https://github.com/SainsburyWellcomeCentre/OBISLaser)) — the OBIS laser (`obis.Laser`, `obis.Calibration`, a simulated laser for tests). Used by `lhf.laser.*`, `laser/irradianceCalibration.m` and `calibration/calibrate_power.m`.
-- `zaberstage` ([ZaberStage](https://github.com/SainsburyWellcomeCentre/ZaberStage)) — the Zaber Z stage (`zaberstage.Stage`, moves refused outside `LimitsUm`). Built by `calibration/rigStage.m`.
-- `olfactometer` ([Olfactometer](https://github.com/SainsburyWellcomeCentre/Olfactometer)) — the valves (`olfactometer.Olfactometer`, sequences sample for sample as before; `olfactometer.AsyncDelivery`, the one warmed-up worker; `olfactometer.Bottles`). Used by `lhf.olf.*` and `olfactometer/test_olfactometer.m`; the rig's bottle tables stay in `olfactometer/`.
+- `zaberstage` ([ZaberStage](https://github.com/SainsburyWellcomeCentre/ZaberStage)) — the Zaber stage, one `zaberstage.Stage` per axis (moves refused outside `LimitsUm`). Z alone from `calibration/rigStage.m`; X, Y and Z sharing one port from `calibration/rigStages.m` (`SharedTransport`).
+- `olfactometer` ([NIDAQOlfactometer](https://github.com/SainsburyWellcomeCentre/NIDAQOlfactometer)) — the valves (`olfactometer.Olfactometer`, sequences sample for sample as before; `olfactometer.AsyncDelivery`, the one warmed-up worker; `olfactometer.Bottles`). Used by `lhf.olf.*` and `olfactometer/test_olfactometer.m`; the rig's bottle tables stay in `olfactometer/`.
 - `hamacam` ([HamamatsuCam](https://github.com/SainsburyWellcomeCentre/HamamatsuCam)) — the Hamamatsu camera (`hamacam.Camera`, averaged uint16 frames). Built by `calibration/rigCamera.m`.
 - `LuminoseConstants.addDevicePackages` puts each repo's root on the path and records versions in `luminose.packageVersions`; a missing repo stops with its URL. Driver code that is not rig- or protocol-specific belongs in the device's repo, not here.
 
@@ -76,6 +76,7 @@ Code the protocols share lives in the `lhf` package (not `luminose`: the global 
 - `lhf.stimDuration` — how long a cue or stimulus lasts (there is no duration setting): a pattern its design (`lhf.patternDuration`), an odour its sequence (`lhf.olf.sequenceDuration`, rows drawn at prepare by `lhf.olf.drawRows` into `NextOdourRow`, handed to the soft-code handler as `SelectedOdourRow` after `getTrialData`), light and sound the `Duration (s)` in their own panel.
 - `lhf.laser.*` — optional laser control (Trials tab's **Laser control**; unticked, nothing connects and the protocol runs without the laser). Power is per pattern design, set in the Pattern Designer, drawn per trial by `lhf.laser.draw` and set by soft code 13 in each trial's first state, `SetLaserPower`.
 - `lhf.stopRecord` (`Data.StoppedReason`) and `lhf.report.write` (end-of-session `_report.md` and `_summary.png`, from cleanup).
+- `lhf.cam.*` — the camera on the Pattern Designer's canvas (D17): the camera-DMD calibration (`calibration/calibrate_camera_dmd.m` → `camera_dmd_*.mat`, `fitRegistration`, `toCamera`/`toDmd`), frames onto the canvas (`canvasMap`/`toCanvas`), per-animal fiducials (`calibration/fiducials/<animal>.mat`, the first saved is the reference), and automatic alignment to that reference with the Zaber X/Y/Z (D18: `register`, `fitStageCamera` from `calibration/calibrate_stage_camera.m`, `align`; the axes from `calibration/rigStages.m` and `zaber.axes`). The column itself is `gui/DesignerCameraPanel.m`.
 
 ### Protocol structure
 
@@ -101,6 +102,7 @@ Reusable widgets used by the protocols' parameter screens:
 - `DrawOptoStim.m` — previews single-pulse or paired-pulse optogenetic timing
 - `OdourBottleClicked.m`, `generateBottleImage.m`, `getOdourMapping.m` — odour bottle selector controls
 - `StartButtonPressed.m` — locks GUI controls and sets the `StartPressed` appdata flag
+- `PatternDesignerGUI.m` + `DesignerCameraPanel.m` — the DMD spot designer; its camera column (live, capture, exposure, histogram contrast, what the DMD shows, fiducial) is the canvas background
 
 ### Global variables
 Protocols use MATLAB globals: `BpodSystem` (Bpod), `S` (GUI parameter struct), `luminose` (LuminoseConstants instance). The olfactometer lives on its worker (`olfactometer.internal.serve`); the client side is `BpodSystem.PluginObjects.Olfactometer`.

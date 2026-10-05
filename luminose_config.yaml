@@ -100,10 +100,22 @@ zaber:
   axisIndex: 1        # Z axis index (1-based)
   zRange_um: [-500, 500]
   zStep_um: 50
-
-# Bonsai workflow configuration
-bonsai:
-  launch_bonsai: false
-  exePath: "C:\\Users\\harrislab\\AppData\\Local\\Bonsai\\bonsai.exe"
-  # exePath: "/home/username/.local/share/Bonsai/bonsai"  # Linux/Mac example
-  workflowPath: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\bonsai\\BehaviourCamerasAcquisition.bonsai"
+  # The three axes on the port, for automatic alignment to an animal's reference
+  # (Pattern Designer, Align to reference; calibration/rigStages.m). Read the device
+  # address and axis number of X and Y on the rig (zaberstage.listDevices or
+  # zaberstage.app) and uncomment. Without x, y and z, alignment is off.
+  # axes:
+  #   x: {device: 1, axis: 2}
+  #   y: {device: 1, axis: 3}
+  #   z: {device: 1, axis: 1}
+  # Alignment limits (these are the defaults; set any to change it)
+  alignment:
+    maxTravelXY_um: 1000    # the stage stays within this of where alignment started
+    maxTravelZ_um: 200
+    maxStep_um: 500         # largest single X/Y move
+    tolerance_um: 2         # done when the remaining X/Y shift is below this
+    maxIterations: 6        # X/Y moves per pass
+    zSearch_um: 100         # Z searched +/- this around the start
+    zStep_um: 10
+    rotationWarn_deg: 1     # warn (re-seat the animal) above this rotation
+    minPeak: 0.1            # lowest registration confidence (imregcorr peak) accepted; a blank view scores ~0.03, tissue 0.5-0.9

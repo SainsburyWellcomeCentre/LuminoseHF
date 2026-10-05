@@ -17,7 +17,7 @@ function files = write(data, info, dataFile, meta)
 
     if nargin < 4, meta = struct(); end
     if ~isfield(meta, 'subject')
-        meta.subject = currentSubject();
+        meta.subject = lhf.subjectName();
     end
     if isfield(data, 'SettingsNotes')
         meta.settingsNotes = data.SettingsNotes;
@@ -119,22 +119,6 @@ function writeLog(file, s, data, info, name, meta)
     end
     closer = onCleanup(@() fclose(fid));
     fprintf(fid, '%s\n', lines{:});
-end
-
-function name = currentSubject()
-% The launch manager always sets GUIData.SubjectName; Status.CurrentSubjectName
-% only when the subject list's selection changes.
-    global BpodSystem
-    name = '';
-    try
-        if isfield(BpodSystem.GUIData, 'SubjectName')
-            name = char(BpodSystem.GUIData.SubjectName);
-        end
-        if isempty(name)
-            name = char(BpodSystem.Status.CurrentSubjectName);
-        end
-    catch
-    end
 end
 
 function t = textOr(s, field, default)

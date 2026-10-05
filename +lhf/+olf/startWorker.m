@@ -5,7 +5,7 @@ function delivery = startWorker(olfConstants)
 %   ...                                   (parameter GUI, wait for START)
 %   lhf.olf.waitWorker(delivery)
 %
-%   An olfactometer.AsyncDelivery (Olfactometer repo), triggered by the state
+%   An olfactometer.AsyncDelivery (NIDAQOlfactometer repo), triggered by the state
 %   machine's TTL, with the rig's bottle tables (a duty of 0 is the bottle's own,
 %   read here once rather than in a soft-code callback). Its one-worker pool and
 %   DAQ session start while the parameter GUI is up (daq("ni") in a fresh process

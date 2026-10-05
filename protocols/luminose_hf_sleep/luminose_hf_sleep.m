@@ -22,23 +22,6 @@ function luminose_hf_sleep
     disp(luminose.olfactometer);
     disp("=====  DMD =====");
     disp(luminose.dmd);
-    disp("=====  Bonsai =====");
-    disp(luminose.bonsai);
-
-    %% Launch bonsai
-    launchBonsai = false;
-    if luminose.bonsai.launch_bonsai
-        choice = questdlg('Launch Bonsai workflow?', 'Launch Bonsai', 'Yes', 'No', 'Yes');
-        launchBonsai = strcmp(choice, 'Yes');
-    end
-
-    if launchBonsai
-        currentDataFile = split(BpodSystem.Path.CurrentDataFile, '\');
-        currentFilePrefix = currentDataFile{end};
-        luminose.bonsai.currentFilePrefix = currentFilePrefix(1:end-4);
-        luminose.bonsai.dataPath = fullfile(join(currentDataFile(1:end-2), '\'), 'Session Videos');
-        launch_bonsai(luminose.bonsai.exePath, luminose.bonsai.workflowPath, luminose.bonsai.dataPath, luminose.bonsai.currentFilePrefix);
-    end
 
     %% Configure trials
     % Defaults come from GUIparams; a saved settings file is merged into them
