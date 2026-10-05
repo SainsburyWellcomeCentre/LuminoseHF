@@ -25,12 +25,21 @@ classdef DesignerCameraPanel < handle
 %       alignment          lhf.cam.align's settings (luminose.zaber.alignment)
 %       confirm            (info) -> true to make the first alignment move
 %                          (default: a dialog with the planned move)
+%       confirmGoTo        (info) -> true to move X/Y to the reference's
+%                          position (default: a dialog with the move)
 %       exposureMs, averageFrames, animal
 %
 %   Align to reference (lhf.cam.align) registers the camera on the animal's
 %   reference frame, moves X/Y, finds Z and refines X/Y, showing each frame;
 %   pressed again it stops. The aligned frame is saved as this session's
 %   entry. The stages connect on first use and are released with the rest.
+%
+%   The STAGE block shows X/Y/Z (Read, and after every move the column
+%   makes) and Go to reference X/Y: X and Y move to where the animal's
+%   reference was saved (its stageUm, else the newest session's), within
+%   each axis's limits, after a confirmation; pressed again it stops. Z
+%   stays, for Align to reference to find. It brings back tissue that is
+%   further away than alignment's travel box.
 %
 %   Nothing connects until it is needed: the camera on Live or Capture,
 %   the DMD when it is asked to project. Both are released when the figure
@@ -54,6 +63,7 @@ classdef DesignerCameraPanel < handle
         Stages = []           % rigStages, once connected
         StageCalibration = [] % lhf.cam.fitStageCamera, or []
         LastAlignment = []    % lhf.cam.align's last result
+        LastStageUm = []      % [x y z] last read, or []
         Controls = struct()   % uicontrols, for scripting and tests
         LastError = ''
     end
@@ -72,6 +82,7 @@ classdef DesignerCameraPanel < handle
         DmdMode = 'dark'      % 'dark' | 'allOn' | 'pattern'
         Closing = false
         Aligning = false
+        Moving = false        % Go to reference X/Y is moving the stage
         StopRequested = false
     end
 
@@ -233,6 +244,7 @@ classdef DesignerCameraPanel < handle
             if obj.guard(@() obj.storeFiducial(file, entry))
                 obj.MarkXY = [];
             end
+            obj.updateReadout();
             obj.refresh();
             obj.Hooks.redraw();
             obj.setLive(wasLive);
@@ -245,6 +257,7 @@ classdef DesignerCameraPanel < handle
                 obj.StopRequested = true;
                 return
             end
+            if obj.Moving, return; end
             if ~obj.canAlign()
                 obj.showError(obj.Controls.AlignInfo.String);
                 return
@@ -273,6 +286,7 @@ classdef DesignerCameraPanel < handle
             obj.Aligning = false;
             obj.Controls.Align.String = 'Align to reference';
             obj.Controls.Align.BackgroundColor = [0.2 0.45 0.7];
+            obj.updateReadout();
             if isempty(result), obj.refresh(); return; end
             obj.LastAlignment = result;
             obj.Controls.AlignInfo.String = result.message;
@@ -290,6 +304,49 @@ classdef DesignerCameraPanel < handle
             if result.rotationWarning || ~any(strcmp(result.status, {'aligned', 'cancelled'}))
                 obj.showError(result.message);
             end
+        end
+
+        function readStage(obj)
+            % Connects the stages if needed and shows where they are.
+            if obj.ensureStages()
+                obj.updateReadout();
+            end
+            obj.refresh();
+        end
+
+        function goToReference(obj)
+            % Moves X and Y to the reference's saved position (Z stays, for
+            % Align to reference); while moving, stops instead.
+            if obj.Moving
+                obj.StopRequested = true;
+                return
+            end
+            [can, why] = obj.canGoToReference();
+            if ~can
+                obj.showError(why);
+                return
+            end
+            [target, source] = obj.referenceXY();
+            obj.setLive(false);
+            if ~obj.ensureStages(), obj.refresh(); return; end
+            obj.updateReadout();
+            if isempty(obj.LastStageUm)
+                obj.showError('Could not read the stage position.');
+                return
+            end
+            info = struct('targetUm', target, 'moveUm', target - obj.LastStageUm(1:2), 'source', source);
+            if ~obj.Options.confirmGoTo(info), return; end
+            obj.Moving = true;
+            obj.StopRequested = false;
+            obj.Controls.GoRef.String = 'Stop';
+            obj.Controls.GoRef.BackgroundColor = [0.55 0.2 0.2];
+            obj.refresh();
+            obj.guard(@() obj.moveXY(target));
+            obj.Moving = false;
+            obj.Controls.GoRef.String = 'Go to reference X/Y';
+            obj.Controls.GoRef.BackgroundColor = obj.BUTTON;
+            obj.updateReadout();
+            obj.refresh();
         end
 
         function drawOverlay(obj, ax)
@@ -391,6 +448,18 @@ classdef DesignerCameraPanel < handle
                 'Callback', @(~, ~) obj.alignToReference());
             c.AlignInfo = obj.label('', [x+158 y+190 226 56]);
             c.AlignInfo.FontSize = 8;
+            obj.label('STAGE', [x y+160 120 22], true);
+            c.ReadStage = obj.button('Read', [x y+128 60 28], @(~, ~) obj.readStage());
+            c.StageReadout = obj.label('Not connected: press Read', [x+66 y+128 318 24]);
+            c.StageReadout.FontSize = 9;
+            c.GoRef = uicontrol(fig, 'Style', 'pushbutton', 'String', 'Go to reference X/Y', ...
+                'Position', [x y+90 150 30], 'FontSize', 10, ...
+                'BackgroundColor', obj.BUTTON, 'ForegroundColor', [1 1 1], ...
+                'TooltipString', ['Move X and Y to where the reference was saved; Z stays ' ...
+                '(Align to reference finds it)'], ...
+                'Callback', @(~, ~) obj.goToReference());
+            c.GoRefInfo = obj.label('', [x+158 y+76 226 44]);
+            c.GoRefInfo.FontSize = 8;
             c.Calibration = obj.label('', [x y+10 384 60]);
             c.Calibration.FontSize = 8;
             obj.Controls = c;
@@ -460,10 +529,90 @@ classdef DesignerCameraPanel < handle
             c.RefFrame.Enable = onOff(calibrated && ~isempty(fid));
             if isempty(fid), c.RefFrame.Value = false; end
             [can, why] = obj.canAlign();
-            c.Align.Enable = onOff(can || obj.Aligning);
+            c.Align.Enable = onOff((can && ~obj.Moving) || obj.Aligning);
             if ~obj.Aligning
                 c.AlignInfo.String = why;
             end
+            c.ReadStage.Enable = onOff(obj.Options.stagesConfigured && ~obj.Aligning && ~obj.Moving);
+            [can, why] = obj.canGoToReference();
+            c.GoRef.Enable = onOff(can || obj.Moving);
+            c.GoRefInfo.String = why;
+        end
+
+        function [can, why] = canGoToReference(obj)
+            % Whether Go to reference X/Y can run, and if not, why (if so, where to).
+            can = false;
+            target = obj.referenceXY();
+            if ~obj.Options.stagesConfigured
+                why = 'Needs zaber.axes (x, y, z, each with safe_um) in luminose_config.yaml.';
+            elseif isempty(obj.Fiducial)
+                why = 'Save this animal''s reference first.';
+            elseif isempty(target)
+                why = ['No stage position saved with this animal''s fiducials: press Read ' ...
+                    'before Save fiducial.'];
+            elseif ~obj.Options.dmdAllowed()
+                why = 'Not while a session runs.';
+            elseif obj.Aligning
+                why = 'Aligning.';
+            else
+                can = true;
+                why = sprintf('Reference X %.0f, Y %.0f um', target);
+                if ~isempty(obj.LastStageUm)
+                    why = sprintf('%s (dX %+.0f, dY %+.0f um)', why, target - obj.LastStageUm(1:2));
+                end
+            end
+        end
+
+        function [target, source] = referenceXY(obj)
+            % The X/Y saved with the reference, else with the newest session that has one.
+            target = [];
+            source = '';
+            fid = obj.Fiducial;
+            if isempty(fid), return; end
+            if isfield(fid.reference, 'stageUm') && numel(fid.reference.stageUm) >= 2
+                target = fid.reference.stageUm(1:2);
+                source = 'reference';
+                return
+            end
+            for k = numel(fid.sessions):-1:1
+                if isfield(fid.sessions(k), 'stageUm') && numel(fid.sessions(k).stageUm) >= 2
+                    target = fid.sessions(k).stageUm(1:2);
+                    source = sprintf('session of %s', fid.sessions(k).time);
+                    return
+                end
+            end
+        end
+
+        function moveXY(obj, target)
+            % Both targets checked before either axis moves, then both moved together.
+            s = obj.Stages;
+            xy = {s.x, s.y};
+            for k = 1:2
+                limits = xy{k}.LimitsUm;
+                if target(k) < limits(1) || target(k) > limits(2)
+                    error('DesignerCameraPanel:outsideLimits', ['%s %.0f um is outside its ' ...
+                        'LimitsUm [%g %g] (its safe range): nothing moved.'], ...
+                        char('X' + k - 1), target(k), limits(1), limits(2));
+                end
+            end
+            s.x.moveAbsolute(target(1), 'Wait', false);
+            s.y.moveAbsolute(target(2), 'Wait', false);
+            while s.x.isMoving() || s.y.isMoving()
+                if obj.StopRequested
+                    s.x.stop();
+                    s.y.stop();
+                    break
+                end
+                pause(0.05);  % lets Stop through
+            end
+        end
+
+        function updateReadout(obj)
+            % Reads X/Y/Z when the stages are connected and shows them.
+            um = obj.stagePositions();
+            if isempty(um), return; end
+            obj.LastStageUm = um;
+            obj.Controls.StageReadout.String = sprintf('X %.1f   Y %.1f   Z %.1f um', um);
         end
 
         function [can, why] = canAlign(obj)
@@ -765,6 +914,7 @@ function options = withDefaults(options)
     end
     if ~isfield(options, 'alignment'), options.alignment = luminose.zaber.alignment; end
     if ~isfield(options, 'confirm'), options.confirm = @confirmFirstMove; end
+    if ~isfield(options, 'confirmGoTo'), options.confirmGoTo = @confirmGoTo; end
 end
 
 function go = confirmFirstMove(info)
@@ -772,6 +922,14 @@ function go = confirmFirstMove(info)
     answer = questdlg(sprintf(['Align to the reference: move the stage X %+.0f um, Y %+.0f um, ' ...
         'then search Z +/- %g um and refine X/Y?'], info.moveUm, info.zSearchUm), ...
         'Align to reference', 'Move', 'Cancel', 'Cancel');
+    go = strcmp(answer, 'Move');
+end
+
+function go = confirmGoTo(info)
+% Asks before Go to reference X/Y moves the stage.
+    answer = questdlg(sprintf(['Move the stage to the %s''s X/Y: X %+.0f um, Y %+.0f um? ' ...
+        'Z stays where it is.'], info.source, info.moveUm), 'Go to reference X/Y', ...
+        'Move', 'Cancel', 'Cancel');
     go = strcmp(answer, 'Move');
 end
 

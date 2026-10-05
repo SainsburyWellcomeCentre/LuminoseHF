@@ -196,6 +196,60 @@ classdef DesignerCameraPanelTest < matlab.unittest.TestCase
             tc.verifyEmpty(fid.reference.stageUm);  % saved before the field existed: filled empty
         end
 
+        function readStageShowsThePositions(tc)
+            stages = tc.stagesAt([1000 2000 3000]);
+            panel = tc.makePanel(tc.registration());
+            tc.verifySubstring(panel.Controls.StageReadout.String, 'press Read');
+            panel.readStage();
+            tc.verifySubstring(panel.Controls.StageReadout.String, 'X 1000.0   Y 2000.0   Z 3000.0');
+            tc.verifyEqual(panel.LastStageUm, [1000 2000 3000]);
+            tc.verifySameHandle(panel.Stages.x, stages.x);
+        end
+
+        function goToReferenceMovesXYOnly(tc)
+            stages = tc.stagesAt([1000 2000 3000]);
+            tc.saveReferenceAt([10000 20000 30000]);
+            panel = tc.makePanel(tc.registration());
+            panel.setAnimal('M5');
+            tc.verifyEqual(panel.Controls.GoRef.Enable, 'on');
+            tc.verifySubstring(panel.Controls.GoRefInfo.String, 'Reference X 10000, Y 20000');
+            panel.goToReference();
+            tc.verifyEmpty(panel.LastError);
+            tc.verifyEqual(tc.positions(stages), [10000 20000 3000]);  % Z stays
+            tc.verifySubstring(panel.Controls.StageReadout.String, 'X 10000.0');
+            tc.verifySubstring(panel.Controls.GoRefInfo.String, 'dX +0, dY +0');
+            tc.verifyEqual(panel.Controls.GoRef.String, 'Go to reference X/Y');
+        end
+
+        function goToReferenceIsOffWithoutASavedPosition(tc)
+            tc.stagesAt([0 0 0]);
+            tc.saveReferenceAt([]);
+            panel = tc.makePanel(tc.registration());
+            panel.setAnimal('M5');
+            tc.verifyEqual(panel.Controls.GoRef.Enable, 'off');
+            tc.verifySubstring(panel.Controls.GoRefInfo.String, 'press Read before Save fiducial');
+        end
+
+        function aTargetOutsideTheSafeRangeIsRefused(tc)
+            stages = tc.stagesAt([1000 2000 3000], [0 5000]);
+            tc.saveReferenceAt([10000 2500 30000]);
+            panel = tc.makePanel(tc.registration());
+            panel.setAnimal('M5');
+            panel.goToReference();
+            tc.verifySubstring(panel.LastError, 'outside');
+            tc.verifyEqual(tc.positions(stages), [1000 2000 3000]);  % neither axis moved
+        end
+
+        function aDeclinedMoveMovesNothing(tc)
+            stages = tc.stagesAt([1000 2000 3000]);
+            tc.saveReferenceAt([10000 20000 30000]);
+            tc.extraOptions.confirmGoTo = @(~) false;
+            panel = tc.makePanel(tc.registration());
+            panel.setAnimal('M5');
+            panel.goToReference();
+            tc.verifyEqual(tc.positions(stages), [1000 2000 3000]);
+        end
+
         function closingTheFigureReleasesTheDevices(tc)
             panel = tc.makePanel(tc.registration());
             panel.capture();
@@ -215,12 +269,35 @@ classdef DesignerCameraPanelTest < matlab.unittest.TestCase
                 'makeCamera', @() tc.connectedCamera(), 'makeDmd', @() tc.dmd, ...
                 'dmdAllowed', @() tc.allowDmd, 'exposureMs', 3, 'averageFrames', 2, 'animal', '', ...
                 'stagesConfigured', false, 'alignment', LuminoseConstants.alignmentDefaults(), ...
-                'confirm', @(~) true);
+                'confirm', @(~) true, 'confirmGoTo', @(~) true);
             for name = fieldnames(tc.extraOptions)'
                 options.(name{1}) = tc.extraOptions.(name{1});
             end
             canvas = struct('axes', tc.ax, 'scale', 2, 'size', [384 512], 'dmdSize', [768 1024]);
             panel = DesignerCameraPanel(tc.fig, [1015 0], canvas, hooks, options);
+        end
+
+        function stages = stagesAt(tc, um, safeX)
+            % Simulated X, Y, Z (rigStages) at um, given to the panel's options
+            if nargin < 3, safeX = [0 50000]; end
+            transport = zaberstage.transport.SimulatedTransport('StartHomed', true, ...
+                'Devices', struct('Address', 1, 'Name', 'X-MCC3', 'SerialNumber', 1, 'AxisCount', 3));
+            luminose.zaber = struct('port', "SIM", 'axes', struct( ...
+                'x', struct('device', 1, 'axis', 1, 'safe_um', safeX), ...
+                'y', struct('device', 1, 'axis', 2, 'safe_um', [0 50000]), ...
+                'z', struct('device', 1, 'axis', 3, 'safe_um', [0 50000])));
+            stages = rigStages(luminose, transport);
+            tc.addTeardown(stages.close);
+            names = {'x', 'y', 'z'};
+            for k = 1:3, stages.(names{k}).moveAbsolute(um(k)); end
+            tc.extraOptions.stagesConfigured = true;
+            tc.extraOptions.makeStages = @() stages;
+        end
+
+        function saveReferenceAt(tc, stageUm)
+            % Animal M5's reference fiducial, saved with this stage position
+            lhf.cam.saveFiducial(lhf.cam.fiducialFile(tc.folder, 'M5'), struct('frame', ...
+                zeros(1100, 1400, 'uint16'), 'xy', [700 550], 'stageUm', stageUm));
         end
 
         function camera = connectedCamera(tc)
@@ -239,6 +316,10 @@ classdef DesignerCameraPanelTest < matlab.unittest.TestCase
     end
 
     methods (Static)
+        function um = positions(stages)
+            um = [stages.x.positionUm(), stages.y.positionUm(), stages.z.positionUm()];
+        end
+
         function reg = registration()
             % The 1024x768 DMD field inside the 1400x1100 simulated sensor, scaled 1.3
             reg = lhf.cam.fitRegistration([0 0; 1024 0; 0 768], [0 0; 1024 0; 0 768] * 1.3 + 20);
