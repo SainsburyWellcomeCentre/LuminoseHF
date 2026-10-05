@@ -265,8 +265,9 @@ classdef LuminoseConstants < handle
                 value = false;
             elseif ~isnan(str2double(text))
                 value = str2double(text);
-            elseif numel(text) >= 2 && ((startsWith(text, '"') && endsWith(text, '"')) || ...
-                    (startsWith(text, '''') && endsWith(text, '''')))
+            elseif numel(text) >= 2 && startsWith(text, '"') && endsWith(text, '"')
+                value = strrep(text(2:end-1), '\\', '\');  % YAML: "\\" in double quotes is one \
+            elseif numel(text) >= 2 && startsWith(text, '''') && endsWith(text, '''')
                 value = text(2:end-1);  % Remove quotes
             else
                 value = text;

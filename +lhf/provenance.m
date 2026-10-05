@@ -18,8 +18,8 @@ function p = provenance(luminose, repos)
 %               and text files under 200 kB, which git diff leaves out), note
 %               (why something could not be read, else '')
 %   p.config    file, text (luminose_config.yaml as it was), values (every
-%               LuminoseConstants property as a plain struct, which loads even
-%               if the class changes)
+%               LuminoseConstants property as a plain struct with text as
+%               char, which loads even if the class changes, and in Python)
 %
 %   Default repositories: LuminoseHF, each device package's repository
 %   (LuminoseConstants.devicePackages), Bpod_Gen2 and DMDController in
@@ -61,10 +61,10 @@ function p = provenance(luminose, repos)
     end
     try
         if isstruct(luminose)
-            p.config.values = luminose;
+            p.config.values = plain(luminose);
         else
             for name = properties(luminose)'
-                p.config.values.(name{1}) = luminose.(name{1});
+                p.config.values.(name{1}) = plain(luminose.(name{1}));
             end
         end
     catch
@@ -112,4 +112,15 @@ end
 function [ok, out] = git(folder, args)
     [status, out] = system(sprintf('git -C "%s" %s', folder, args));
     ok = status == 0;
+end
+
+function v = plain(v)
+% string -> char (cellstr for arrays), recursively through structs: plain data
+    if isstring(v)
+        if isscalar(v), v = char(v); else, v = cellstr(v); end
+    elseif isstruct(v) && isscalar(v)
+        for name = fieldnames(v)'
+            v.(name{1}) = plain(v.(name{1}));
+        end
+    end
 end

@@ -9,7 +9,8 @@ function c = calibrationSnapshot(luminose, calibrationFolder)
 %   calibrations overwrite dmd/power_calibration.csv and add newer files, so
 %   the session keeps its own copy of what it used.
 %
-%   c.power        file (dmd/power_calibration.csv), text (as it was), table,
+%   c.power        file (dmd/power_calibration.csv), text (as it was), table
+%                  (a struct of columns: plain data that Python can read too),
 %                  newestRun (the newest power_*.mat in calibrationFolder)
 %   c.spotGain     luminose.laser.spotGain (spot / full-field irradiance)
 %   c.cameraDmd    file and registration (the newest camera_dmd_*.mat, without
@@ -35,7 +36,7 @@ function c = calibrationSnapshot(luminose, calibrationFolder)
     try
         c.power.file = fullfile(char(luminose.f.luminose_hf), 'dmd', 'power_calibration.csv');
         c.power.text = fileread(c.power.file);
-        c.power.table = readtable(c.power.file);
+        c.power.table = table2struct(readtable(c.power.file), 'ToScalar', true);
     catch err
         c.notes{end+1} = ['power calibration: ' err.message];
     end

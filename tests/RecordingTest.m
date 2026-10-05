@@ -125,6 +125,26 @@ classdef RecordingTest < matlab.unittest.TestCase
             tc.verifyMatches(setup.fiducial.entry.code.commit, '^[0-9a-f]{40}$');  % saveFiducial records the code
         end
 
+        function aDataFileOutsideTheDataFolderIsFlagged(tc)
+            options = struct('calibrationFolder', tc.calibration, 'makeStages', @() failing('none'), ...
+                'repos', {{}}, 'dataFile', fullfile(tc.folder, 'M1', 'session.mat'));
+            setup = lhf.recordSetup(tc.luminose, 'M1', options);
+            tc.verifyEmpty(setup.dataFolderNote);   % tc.folder is the data folder
+            options.dataFile = 'E:\elsewhere\M1\session.mat';
+            setup = tc.verifyWarning(@() lhf.recordSetup(tc.luminose, 'M1', options), ...
+                'lhf:recordSetup:dataFolder');
+            tc.verifySubstring(setup.dataFolderNote, 'outside the data folder');
+        end
+
+        function configPathsHaveSingleBackslashes(tc)
+            % YAML "\\" in double quotes is one \: paths compare equal to Bpod's
+            file = fullfile(tc.folder, 'paths.yaml');
+            writeFile(file, sprintf('paths:\n  dataFolder: "D:\\\\luminoseData\\\\rawdata"   # note\n  other: ''a\\\\b''\n'));
+            config = LuminoseConstants.readConfig(file);
+            tc.verifyEqual(char(config.paths.dataFolder), 'D:\luminoseData\rawdata');
+            tc.verifyEqual(char(config.paths.other), 'a\\b');   % single quotes: as written
+        end
+
         function aSessionIsWrittenOutToRunAgain(tc)
             tc.saveCalibrations();
             writeFile(fullfile(tc.repo, 'tracked.m'), 'x = 2;');

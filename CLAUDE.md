@@ -50,7 +50,7 @@ Update the affected doc in the same change, and add a test for anything added to
 ## Architecture
 
 ### Configuration layer
-- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.laser`, `.camera`, `.zaber` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol. Data live in `paths.dataFolder` (`D:\luminoseData` since 2026-10-05).
+- `LuminoseConstants.m` — handle class; loads `luminose_config.yaml`, resolves paths, exposes `.f`, `.bpod`, `.olfactometer`, `.dmd`, `.laser`, `.camera`, `.zaber` structs. Always instantiate this as `luminose = LuminoseConstants()` at the top of a protocol. Data live in `paths.dataFolder`: `D:\luminoseData\rawdata` since 2026-10-05 (sessions, `calibration/`, fiducials). Bpod's own data folder (Bpod console settings) must be the same; `lhf.recordSetup` warns at START when a session is saved elsewhere.
 
 ### Device packages (separate repos in `paths.matlabFolder`, D16)
 - `obis` ([OBISLaser](https://github.com/SainsburyWellcomeCentre/OBISLaser)) — the OBIS laser (`obis.Laser`, `obis.Calibration`, a simulated laser for tests). Used by `lhf.laser.*`, `laser/irradianceCalibration.m` and `calibration/calibrate_power.m`.

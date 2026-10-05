@@ -5,7 +5,7 @@
 paths:
   parentFolder: "C:\\Users\\harrislab" 
   matlabFolder: "C:\\Users\\harrislab\\MATLAB"
-  dataFolder: "D:\\luminoseData"
+  dataFolder: "D:\\luminoseData\\rawdata"   # every session and calibration lives here (Bpod's data folder must match)
 
 # Bpod behavioral system configuration
 bpod:

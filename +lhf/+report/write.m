@@ -142,6 +142,9 @@ function lines = reproduceLines(data)
         lines{end+1} = sprintf('| %s | %s | %s |', r.name, r.commit(1:min(end, 10)), state); %#ok<AGROW>
     end
     lines{end+1} = '';
+    if isfield(setup, 'dataFolderNote') && ~isempty(setup.dataFolderNote)
+        lines{end+1} = ['- **Data folder:** ' escape(setup.dataFolderNote)];
+    end
     if isempty(setup.stageUm)
         lines{end+1} = sprintf('- Stage at START: not read (%s)', escape(setup.stageNote));
     else
