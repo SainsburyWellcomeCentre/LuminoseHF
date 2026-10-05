@@ -197,94 +197,107 @@ classdef LuminoseConstants < handle
         function config = parseYAMLBasic(filename)
             % parseYAMLBasic  Basic YAML parser (fallback)
             %
-            %   This is a simple parser for basic YAML. For complex configs,
-            %   install the YAML toolbox: https://github.com/ewiger/yamlmatlab
-            
+            %   Nested "key:" blocks at any depth (by indentation), scalars (true, false,
+            %   numbers, quoted or bare text), [a, b] lists (a row vector when all numbers,
+            %   else a cell) and {key: value} maps. For complex configs, install the YAML
+            %   toolbox: https://github.com/ewiger/yamlmatlab
+
             fid = fopen(filename, 'r');
             if fid == -1
                 error('Cannot open file: %s', filename);
             end
-            
+            closeFile = onCleanup(@() fclose(fid));
+
             config = struct();
-            currentSection = '';
-            currentSubsection = '';
-            
+            stack = struct('indent', -1, 'path', {{}});  % open blocks, outermost first
             while ~feof(fid)
-                line = fgetl(fid);
-                originalLine = line;
-                line = strtrim(line);
-                
-                % Skip comments and empty lines
-                if isempty(line) || startsWith(line, '#')
+                originalLine = fgetl(fid);
+                if ~ischar(originalLine), break; end
+                line = strtrim(originalLine);
+                % Skip comments, empty lines and anything that is not "key: value"
+                colonIdx = strfind(line, ':');
+                if isempty(line) || startsWith(line, '#') || isempty(colonIdx)
                     continue;
                 end
-                
-                % Count leading spaces for indentation level
-                leadingSpaces = 0;
-                for i = 1:length(originalLine)
-                    if originalLine(i) == ' '
-                        leadingSpaces = leadingSpaces + 1;
-                    else
-                        break;
-                    end
+                indent = find(originalLine ~= ' ', 1) - 1;
+                key = strtrim(line(1:colonIdx(1)-1));
+                value = strtrim(line(colonIdx(1)+1:end));
+                % Strip inline comments
+                hashIdx = strfind(value, '#');
+                if ~isempty(hashIdx), value = strtrim(value(1:hashIdx(1)-1)); end
+
+                while stack(end).indent >= indent
+                    stack(end) = [];
                 end
-                
-                % Check if this is a key (ends with colon)
-                colonIdx = strfind(line, ':');
-                if ~isempty(colonIdx)
-                    key = strtrim(line(1:colonIdx(1)-1));
-                    value = strtrim(line(colonIdx(1)+1:end));
-                    % Strip inline comments
-                    hashIdx = strfind(value, '#');
-                    if ~isempty(hashIdx), value = strtrim(value(1:hashIdx(1)-1)); end
-                    
-                    % Level 0: Top-level section (no indentation)
-                    if leadingSpaces == 0 && endsWith(line, ':')
-                        currentSection = key;
-                        currentSubsection = '';
-                        config.(currentSection) = struct();
-                        continue;
-                    end
-                    
-                    % Level 1: Subsection (2 spaces)
-                    if leadingSpaces == 2 && isempty(value)
-                        currentSubsection = key;
-                        if ~isempty(currentSection)
-                            config.(currentSection).(currentSubsection) = struct();
-                        end
-                        continue;
-                    end
-                    
-                    % Key-value pairs with actual values
-                    if ~isempty(value)
-                        % Convert value types
-                        if strcmp(value, 'true')
-                            value = true;
-                        elseif strcmp(value, 'false')
-                            value = false;
-                        elseif ~isempty(str2double(value)) && ~isnan(str2double(value))
-                            value = str2double(value);
-                        else
-                            % Remove quotes if present
-                            if (startsWith(value, '"') && endsWith(value, '"')) || ...
-                               (startsWith(value, '''') && endsWith(value, ''''))
-                                value = value(2:end-1);
-                            end
-                        end
-                        
-                        % Assign to appropriate level based on indentation
-                        if leadingSpaces >= 4 && ~isempty(currentSubsection)
-                            % Level 2: nested under subsection (4+ spaces)
-                            config.(currentSection).(currentSubsection).(key) = value;
-                        elseif leadingSpaces >= 2 && ~isempty(currentSection)
-                            % Level 1: under section (2+ spaces)
-                            config.(currentSection).(key) = value;
-                        end
-                    end
+                path = [stack(end).path, {key}];
+                if isempty(value)
+                    config = setfield(config, path{:}, struct());
+                    stack(end + 1) = struct('indent', indent, 'path', {path}); %#ok<AGROW>
+                else
+                    config = setfield(config, path{:}, LuminoseConstants.parseYAMLValue(value));
                 end
             end
-            
-            fclose(fid);
+        end
+
+        function value = parseYAMLValue(text)
+            % parseYAMLValue  One YAML value: a scalar, [a, b] list or {key: value} map
+            text = strtrim(text);
+            if startsWith(text, '[') && endsWith(text, ']')
+                items = cellfun(@LuminoseConstants.parseYAMLValue, ...
+                    LuminoseConstants.splitYAMLItems(text(2:end-1)), 'UniformOutput', false);
+                if all(cellfun(@(v) isnumeric(v) && isscalar(v), items))
+                    value = [items{:}];
+                    if isempty(value), value = zeros(1, 0); end
+                else
+                    value = items;
+                end
+            elseif startsWith(text, '{') && endsWith(text, '}')
+                value = struct();
+                for item = LuminoseConstants.splitYAMLItems(text(2:end-1))
+                    colonIdx = strfind(item{1}, ':');
+                    if isempty(colonIdx), continue; end
+                    value.(strtrim(item{1}(1:colonIdx(1)-1))) = ...
+                        LuminoseConstants.parseYAMLValue(item{1}(colonIdx(1)+1:end));
+                end
+            elseif strcmp(text, 'true')
+                value = true;
+            elseif strcmp(text, 'false')
+                value = false;
+            elseif ~isnan(str2double(text))
+                value = str2double(text);
+            elseif numel(text) >= 2 && ((startsWith(text, '"') && endsWith(text, '"')) || ...
+                    (startsWith(text, '''') && endsWith(text, '''')))
+                value = text(2:end-1);  % Remove quotes
+            else
+                value = text;
+            end
+        end
+
+        function items = splitYAMLItems(text)
+            % splitYAMLItems  Split at commas outside brackets, braces and quotes
+            items = {};
+            depth = 0;
+            quote = '';
+            from = 1;
+            for k = 1:numel(text)
+                c = text(k);
+                if ~isempty(quote)
+                    if c == quote, quote = ''; end
+                elseif c == '"' || c == ''''
+                    quote = c;
+                elseif c == '[' || c == '{'
+                    depth = depth + 1;
+                elseif c == ']' || c == '}'
+                    depth = depth - 1;
+                elseif c == ',' && depth == 0
+                    items{end + 1} = strtrim(text(from:k-1)); %#ok<AGROW>
+                    from = k + 1;
+                end
+            end
+            last = strtrim(text(from:end));
+            if ~isempty(last) || ~isempty(items)
+                items{end + 1} = last;
+            end
         end
         
     end
@@ -453,17 +466,24 @@ classdef LuminoseConstants < handle
             cfg = config.zaber;
             obj.zaber = struct( ...
                 'port',      string(cfg.port), ...
-                'axisIndex', cfg.axisIndex, ...
                 'zRange_um', cfg.zRange_um, ...
                 'zStep_um',  cfg.zStep_um ...
             );
-            % Optional: the X, Y and Z axes for automatic alignment (rigStages), and its limits
+            % Optional: the X, Y and Z axes (rigStage, rigStages), each counted the other way
+            % if reversed (zaberstage.Stage 'Reversed') and kept within safe_um
+            % (SafeLimitsUm; rigAxisOptions refuses an axis without it), and alignment's limits
             obj.zaber.axes = struct();
             if isfield(cfg, 'axes') && isstruct(cfg.axes)
                 for name = {'x', 'y', 'z'}
                     if isfield(cfg.axes, name{1})
                         a = cfg.axes.(name{1});
-                        obj.zaber.axes.(name{1}) = struct('device', double(a.device), 'axis', double(a.axis));
+                        obj.zaber.axes.(name{1}) = struct('device', double(a.device), 'axis', double(a.axis), ...
+                            'reversed', isfield(a, 'reversed') && logical(a.reversed));
+                        if isfield(a, 'safe_um')
+                            safe = a.safe_um;
+                            if ~isnumeric(safe), safe = str2double(string(safe)); end  % -Inf, Inf read as text
+                            obj.zaber.axes.(name{1}).safe_um = double(safe(:)');
+                        end
                     end
                 end
             end

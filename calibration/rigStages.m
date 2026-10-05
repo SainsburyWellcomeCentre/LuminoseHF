@@ -6,9 +6,11 @@ function stages = rigStages(luminose, transport)
 %
 %   Struct x, y, z of zaberstage.Stage (ZaberStage repo), each on its device and
 %   axis from luminose.zaber.axes, sharing one transport on luminose.zaber.port
-%   ('SharedTransport', true), and close, a function that disconnects all three
-%   and closes the port. Their limits start as each axis's own travel: narrow
-%   LimitsUm before moving. Errors if the config does not name all three axes.
+%   ('SharedTransport', true), counted the other way where the axis says
+%   reversed: true and kept within its safe_um (rigAxisOptions), and close, a
+%   function that disconnects all three and closes the port. Their limits start as
+%   each axis's safe range: narrow LimitsUm before moving. Errors if the config does
+%   not name all three axes, each with its safe_um.
 
     axes = luminose.zaber.axes;
     if ~all(isfield(axes, {'x', 'y', 'z'}))
@@ -22,9 +24,8 @@ function stages = rigStages(luminose, transport)
     stages = struct();
     try
         for name = {'x', 'y', 'z'}
-            a = axes.(name{1});
-            stage = zaberstage.Stage('Transport', transport, 'DeviceAddress', a.device, ...
-                'AxisNumber', a.axis, 'SharedTransport', true);
+            options = rigAxisOptions(axes, name{1});
+            stage = zaberstage.Stage('Transport', transport, 'SharedTransport', true, options{:});
             stage.connect();
             stages.(name{1}) = stage;
         end

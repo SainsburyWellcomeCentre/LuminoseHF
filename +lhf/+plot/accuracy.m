@@ -8,8 +8,10 @@ function accuracy(ax, action, varargin)
 %   data  BpodSystem.Data; reads TrialTypes and TrialOutcome (lhf.scoreTrial)
 %
 %   A trial counts as correct when its outcome is lhf.Outcome.Correct;
-%   incorrect and no-response trials count against. Each line averages the
-%   last WINDOW trials of its type. Only trials added since the last update
+%   incorrect and no-response trials count against. Each type's line averages
+%   the last WINDOW trials of that type (until 2026-10-05: that type's trials
+%   among the last WINDOW trials); Overall averages the last WINDOW trials.
+%   Only trials added since the last update
 %   are scored; the rest are kept in ax.UserData.
 
     WINDOW = 20;
@@ -84,9 +86,11 @@ function accuracy(ax, action, varargin)
 end
 
 function m = windowMean(values, i, window)
-% Mean of the window ending at trial i, ignoring NaN (trials of the other type)
-    v = values(max(1, i - window + 1):i);
+% Mean of the last window values up to trial i, skipping NaN (trials of the
+% other type), so a type's line covers its own last window trials
+    v = values(1:i);
     v = v(~isnan(v));
+    v = v(max(1, end - window + 1):end);
     if isempty(v)
         m = NaN;
     else

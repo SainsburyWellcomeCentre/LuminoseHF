@@ -21,7 +21,7 @@ classdef DesignerCameraPanel < handle
 %                          alignment waits too)
 %       stageCalibration   an lhf.cam.fitStageCamera, instead of loading one
 %       makeStages         () -> rigStages: struct x, y, z, close
-%       stagesConfigured   whether zaber.axes names x, y and z
+%       stagesConfigured   whether zaber.axes names x, y and z, each with its safe_um
 %       alignment          lhf.cam.align's settings (luminose.zaber.alignment)
 %       confirm            (info) -> true to make the first alignment move
 %                          (default: a dialog with the planned move)
@@ -474,7 +474,7 @@ classdef DesignerCameraPanel < handle
             elseif isempty(obj.StageCalibration)
                 why = 'Needs the stage-camera calibration: run calibration/calibrate_stage_camera.m.';
             elseif ~obj.Options.stagesConfigured
-                why = 'Needs zaber.axes (x, y, z) in luminose_config.yaml.';
+                why = 'Needs zaber.axes (x, y, z, each with safe_um) in luminose_config.yaml.';
             elseif isempty(obj.Fiducial)
                 why = 'Save this animal''s reference first.';
             elseif ~obj.Options.dmdAllowed()
@@ -759,7 +759,9 @@ function options = withDefaults(options)
     if ~isfield(options, 'stageCalibration'), options.stageCalibration = []; end
     if ~isfield(options, 'makeStages'), options.makeStages = @() rigStages(luminose); end
     if ~isfield(options, 'stagesConfigured')
-        options.stagesConfigured = all(isfield(luminose.zaber.axes, {'x', 'y', 'z'}));
+        axes = luminose.zaber.axes;
+        options.stagesConfigured = all(isfield(axes, {'x', 'y', 'z'})) ...
+            && all(cellfun(@(n) isfield(axes.(n), 'safe_um'), {'x', 'y', 'z'}));
     end
     if ~isfield(options, 'alignment'), options.alignment = luminose.zaber.alignment; end
     if ~isfield(options, 'confirm'), options.confirm = @confirmFirstMove; end

@@ -97,17 +97,39 @@ camera:
 # Zaber 3-axis stage configuration
 zaber:
   port: "COM14"
-  axisIndex: 1        # Z axis index (1-based)
   zRange_um: [-500, 500]
   zStep_um: 50
-  # The three axes on the port, for automatic alignment to an animal's reference
-  # (Pattern Designer, Align to reference; calibration/rigStages.m). Read the device
-  # address and axis number of X and Y on the rig (zaberstage.listDevices or
-  # zaberstage.app) and uncomment. Without x, y and z, alignment is off.
-  # axes:
-  #   x: {device: 1, axis: 2}
-  #   y: {device: 1, axis: 3}
-  #   z: {device: 1, axis: 1}
+  # The three axes on the port (X is axis 1, Y 2, Z 3): Z for calibrate_z
+  # (calibration/rigStage.m), all three for automatic alignment to an animal's reference
+  # (Pattern Designer, Align to reference; calibration/rigStages.m). Without x, y and z,
+  # alignment is off. reversed: true counts an axis the other way in MATLAB only
+  # (zaberstage.Stage 'Reversed'; Zaber Launcher and the controller are unchanged).
+  # safe_um: [min max] is the range the axis may move in without hitting anything, in um
+  # as MATLAB counts it (so reversed for X; read it in zaberstage.app); -Inf or Inf is
+  # that end of the axis's own travel. MATLAB refuses
+  # any move outside it, a script cannot widen it, and an axis without it does not
+  # connect. Homing is refused when the home end lies outside it (home from Zaber
+  # Launcher with the path cleared). Zaber Launcher itself does not know these limits.
+  # For example:
+  #   x:
+  #     device: 1
+  #     axis: 1
+  #     reversed: true
+  #     safe_um: [10000, 40000]
+  axes:
+    x:
+      device: 1
+      axis: 1
+      reversed: true
+      safe_um: [-Inf, Inf]      # nothing to hit (2026-10-05)
+    y:
+      device: 1
+      axis: 2
+      safe_um: [35000, Inf]     # never below 35 mm
+    z:
+      device: 1
+      axis: 3
+      safe_um: [-Inf, 30000]    # never above 30 mm
   # Alignment limits (these are the defaults; set any to change it)
   alignment:
     maxTravelXY_um: 1000    # the stage stays within this of where alignment started

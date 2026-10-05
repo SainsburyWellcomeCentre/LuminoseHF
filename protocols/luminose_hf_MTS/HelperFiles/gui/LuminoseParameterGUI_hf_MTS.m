@@ -688,10 +688,20 @@ function varargout = LuminoseParameterGUI_hf_MTS(varargin)
                 end
                 if ~isequal(ThisParamStyle, 5), BpodSystem.GUIData.ParameterGUI.LastParamValues{p} = Params.GUI.(ThisParamName); end
             end
+            syncMeta = struct;
+            if isfield(Params, 'GUIMeta')
+                syncMeta = Params.GUIMeta;
+            elseif isfield(BpodSystem.GUIData, 'ParameterGUI') && ...
+                   isfield(BpodSystem.GUIData.ParameterGUI, 'LatestMeta')
+                syncMeta = BpodSystem.GUIData.ParameterGUI.LatestMeta;
+            end
+
             BpodSystem.GUIData.ParameterGUI.LatestGUIParams = Params.GUI;
-            BpodSystem.GUIData.ParameterGUI.LatestMeta = Params.GUIMeta;
-            UpdateRelevantPanels(Params.GUI, Params.GUIMeta);
-            if isfield(BpodSystem.GUIHandles.ParameterGUI, 'TrialStructureAxes'), DrawTrialStructure(Params.GUI, Params.GUIMeta); end
+            BpodSystem.GUIData.ParameterGUI.LatestMeta = syncMeta;
+            if ~isempty(fieldnames(syncMeta))
+                UpdateRelevantPanels(Params.GUI, syncMeta);
+                if isfield(BpodSystem.GUIHandles.ParameterGUI, 'TrialStructureAxes'), DrawTrialStructure(Params.GUI, syncMeta); end
+            end
             if isfield(BpodSystem.GUIHandles.ParameterGUI, 'OptoStimAxes'), DrawOptoStim(Params.GUI); end
     end
     if verLessThan('MATLAB', '8.4'), drawnow; end

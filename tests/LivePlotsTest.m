@@ -61,6 +61,16 @@ classdef LivePlotsTest < matlab.unittest.TestCase
             tc.verifySubstring(st.title.String, '75.0% (3/4)');
         end
 
+        function accuracyAveragesEachTypesOwnLastTrials(tc)
+            % 20 CS+ trials (half correct), then 20 CS- trials: the CS+ line still
+            % covers its own last 20, Overall the last 20 trials
+            C = lhf.Outcome.Correct; I = lhf.Outcome.Incorrect;
+            data = fakeSession([ones(1, 20), 2 * ones(1, 20)], [repmat(I, 1, 10), repmat(C, 1, 30)]);
+            lhf.plot.accuracy(tc.ax.Accuracy, 'init', tc.info);
+            lhf.plot.accuracy(tc.ax.Accuracy, 'update', data);
+            tc.verifyEqual(tc.ax.Accuracy.UserData.moving(end, :), [0.5 1 1], 'AbsTol', 1e-12);
+        end
+
         function accuracyOnlyScoresNewTrials(tc)
             C = lhf.Outcome.Correct;
             data = fakeSession([1 2], [C C]);

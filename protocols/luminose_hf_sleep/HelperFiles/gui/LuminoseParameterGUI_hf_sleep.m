@@ -365,12 +365,33 @@ function varargout = LuminoseParameterGUI_hf_sleep(varargin)
                         elseif ~isequal(ThisParamCurrentValue, ThisParamLastValue), set(ThisParamHandle, 'Value', ThisParamCurrentValue); end
                     case 6
                         GUIParam = ThisParamCurrentValue;
+                    case 10
+                        % The opto pattern table: probabilities and exposures (as goNogo's)
+                        tableData = get(ThisParamHandle, 'Data');
+                        sd = get(ThisParamHandle, 'UserData');
+                        nRows = size(tableData, 1);
+                        probsVec = zeros(nRows,1); exposureVec = ones(nRows,1)*1e6;
+                        for iR = 1:nRows
+                            pVal = tableData{iR,1}; if isempty(pVal)||isnan(pVal), pVal=0; end
+                            probsVec(iR) = pVal;
+                            exposureVec(iR) = tableData{iR,3} * 1000;  % ms in the table, us in S.GUI
+                        end
+                        Params.GUI.(sd.ProbParam)     = probsVec;
+                        Params.GUI.(sd.ExposureParam) = exposureVec;
+                        % nFrames is managed by PatternDesignerGUI, not read from table
                 end
                 BpodSystem.GUIData.ParameterGUI.LastParamValues{p} = Params.GUI.(ThisParamName);
             end
+            syncMeta = struct;
+            if isfield(Params, 'GUIMeta')
+                syncMeta = Params.GUIMeta;
+            elseif isfield(BpodSystem.GUIData, 'ParameterGUI') && ...
+                   isfield(BpodSystem.GUIData.ParameterGUI, 'LatestMeta')
+                syncMeta = BpodSystem.GUIData.ParameterGUI.LatestMeta;
+            end
             BpodSystem.GUIData.ParameterGUI.LatestGUIParams = Params.GUI;
-            BpodSystem.GUIData.ParameterGUI.LatestMeta = Params.GUIMeta;
-            UpdateRelevantPanels(Params.GUI, Params.GUIMeta);
+            BpodSystem.GUIData.ParameterGUI.LatestMeta = syncMeta;
+            if ~isempty(fieldnames(syncMeta)), UpdateRelevantPanels(Params.GUI, syncMeta); end
     end
     if verLessThan('MATLAB', '8.4'), drawnow; end
     varargout{1} = Params;

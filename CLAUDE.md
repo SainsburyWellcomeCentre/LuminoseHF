@@ -92,7 +92,7 @@ protocols/luminose_hf_<name>/
       LuminoseParameterGUI_hf_<name>.m      # Renders and syncs the parameter GUI
 ```
 
-The sleep protocol keeps its own encoder and tracking plots and has no report.
+The sleep protocol keeps its own encoder plot and has no report.
 
 The trial loop: sync the GUI → `lhf.nextTrialType` → `PrepareStateMachine` → `SendStateMachine(sma, 'RunASAP')` → `getTrialData` → start the next trial → record (`AddTrialEvents`, `lhf.scoreTrial`, sniff, encoder) → `lhf.plot.*` updates → one `drawnow` → repeat.
 

@@ -27,8 +27,9 @@ classdef StageAlignmentTest < matlab.unittest.TestCase
             tc.C = 0.634 * [cosd(t) sind(t); -sind(t) cosd(t)] * [1 0; 0 -1];
             tc.transport = zaberstage.transport.SimulatedTransport('StartHomed', true, ...
                 'Devices', struct('Address', 1, 'Name', 'X-MCC3', 'SerialNumber', 1, 'AxisCount', 3));
-            luminose.zaber = struct('port', "SIM", 'axes', struct('x', struct('device', 1, 'axis', 1), ...
-                'y', struct('device', 1, 'axis', 2), 'z', struct('device', 1, 'axis', 3)));
+            safe = [0 50000];   % the simulated travel
+            luminose.zaber = struct('port', "SIM", 'axes', struct('x', struct('device', 1, 'axis', 1, 'safe_um', safe), ...
+                'y', struct('device', 1, 'axis', 2, 'safe_um', safe), 'z', struct('device', 1, 'axis', 3, 'safe_um', safe)));
             tc.stages = rigStages(luminose, tc.transport);
             tc.moveTo(tc.start);
         end
@@ -176,6 +177,67 @@ classdef StageAlignmentTest < matlab.unittest.TestCase
             tc.verifyEqual([tc.stages.x.AxisNumber tc.stages.y.AxisNumber tc.stages.z.AxisNumber], [1 2 3]);
             tc.stages.x.disconnect();
             tc.verifyTrue(tc.transport.isOpen());  % y and z still use it
+        end
+
+        function rigStagesReverseTheAxesSaid(tc)
+            transport = zaberstage.transport.SimulatedTransport('StartHomed', true, ...
+                'Devices', struct('Address', 1, 'Name', 'X-MCC3', 'SerialNumber', 1, 'AxisCount', 3));
+            luminose.zaber = struct('port', "SIM", 'axes', struct('x', struct('device', 1, 'axis', 1, ...
+                'reversed', true, 'safe_um', [30000 50000]), 'y', struct('device', 1, 'axis', 2, 'safe_um', [0 20000]), ...
+                'z', struct('device', 1, 'axis', 3, 'safe_um', [0 50000])));
+            stages = rigStages(luminose, transport);
+            tc.addTeardown(stages.close);
+            tc.verifyEqual([stages.x.Reversed stages.y.Reversed stages.z.Reversed], [true false false]);
+            stages.x.moveRelative(-100);
+            tc.verifyEqual(transport.PositionsUm('1.1'), 100);  % +100 on the controller
+        end
+
+        function rigStagesKeepEachAxisInItsSafeRange(tc)
+            transport = zaberstage.transport.SimulatedTransport('StartHomed', true, ...
+                'Devices', struct('Address', 1, 'Name', 'X-MCC3', 'SerialNumber', 1, 'AxisCount', 3));
+            luminose.zaber = struct('port', "SIM", 'axes', struct('x', struct('device', 1, 'axis', 1, ...
+                'safe_um', [0 20000]), 'y', struct('device', 1, 'axis', 2, 'safe_um', [0 20000]), ...
+                'z', struct('device', 1, 'axis', 3, 'safe_um', [5000 30000])));
+            stages = rigStages(luminose, transport);
+            tc.addTeardown(stages.close);
+            tc.verifyEqual(stages.z.SafeLimitsUm, [5000 30000]);
+            tc.verifyEqual(stages.z.LimitsUm, [5000 30000]);
+            tc.verifyError(@() stages.x.moveAbsolute(20001), 'zaberstage:Stage:outsideLimits');
+            tc.verifyError(@() setLimits(stages.y, [0 25000]), 'zaberstage:Stage:limitsOutsideSafe');
+            tc.verifyError(@() stages.z.home(), 'zaberstage:Stage:homeOutsideSafe');
+            function setLimits(stage, limits)
+                stage.LimitsUm = limits;
+            end
+        end
+
+        function anAxisWithoutASafeRangeDoesNotConnect(tc)
+            transport = zaberstage.transport.SimulatedTransport('Devices', ...
+                struct('Address', 1, 'Name', 'X-MCC3', 'SerialNumber', 1, 'AxisCount', 3));
+            luminose.zaber = struct('port', "SIM", 'axes', struct('x', struct('device', 1, 'axis', 1, ...
+                'safe_um', [0 1000]), 'y', struct('device', 1, 'axis', 2), 'z', struct('device', 1, 'axis', 3, 'safe_um', [0 1000])));
+            tc.verifyError(@() rigStages(luminose, transport), 'rigAxisOptions:noSafeLimits');
+            tc.verifyFalse(transport.isOpen());   % x, already connected, released with the port
+        end
+
+        function theConfigReadsAnAxisWithItsSafeRange(tc)
+            file = [tempname '.yaml'];
+            tc.addTeardown(@() delete(file));
+            fid = fopen(file, 'w');
+            fprintf(fid, ['zaber:\n  port: "COM14"\n  axes:\n    x: {device: 1, axis: 1, reversed: true, safe_um: [10000, 40000]}\n' ...
+                '    y:\n      device: 1\n      axis: 2   # a comment\n      safe_um: [-5.5, 20000]\n  zStep_um: 50\n']);
+            fclose(fid);
+            config = LuminoseConstants.readConfig(file);
+            x = config.zaber.axes.x;
+            tc.verifyEqual(double(x.safe_um(:)'), [10000 40000]);
+            tc.verifyTrue(logical(x.reversed));
+            y = config.zaber.axes.y;
+            tc.verifyEqual([y.device y.axis], [1 2]);
+            tc.verifyEqual(double(y.safe_um(:)'), [-5.5 20000]);
+            tc.verifyEqual(config.zaber.zStep_um, 50);   % back out of the nested blocks
+            tc.verifyEqual(char(config.zaber.port), 'COM14');
+            real = LuminoseConstants().zaber.axes;   % the rig's: Y and Z open at one end
+            tc.verifyEqual(real.y.safe_um, [35000 Inf]);
+            tc.verifyEqual(real.z.safe_um, [-Inf 30000]);
         end
     end
 
