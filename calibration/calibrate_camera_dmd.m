@@ -83,7 +83,8 @@ registration.spotRadiusPx = SPOT_R_PX;
 outDir = fullfile(char(luminose.f.luminoseData), 'calibration');
 if ~isfolder(outDir), mkdir(outDir); end
 matPath = fullfile(outDir, ['camera_dmd_' registration.timestamp '.mat']);
-save(matPath, 'registration', 'background');
+provenance = lhf.provenance(luminose);  % code, config and computer it was made with
+save(matPath, 'registration', 'background', 'provenance');
 fprintf('Saved %s\n', matPath);
 
 fig = figure('Name', 'Camera-DMD calibration', 'NumberTitle', 'off', 'Position', [100 100 1000 480]);

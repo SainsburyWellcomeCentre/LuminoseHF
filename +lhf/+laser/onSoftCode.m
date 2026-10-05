@@ -21,16 +21,16 @@ function onSoftCode()
         next = BpodSystem.PluginObjects.LaserQueue(1, :);
         BpodSystem.PluginObjects.LaserQueue(1, :) = [];
         BpodSystem.PluginObjects.Laser.setPower(next(2));
-        laserLog(sprintf('irradiance=%.2f mW/mm^2 setpoint=%.1f mW', next(1), next(2)));
+        laserLog(sprintf('trial=%d irradiance=%.2f mW/mm^2 setpoint=%.1f mW', ...
+            lhf.runningTrial(), next(1), next(2)));
     catch err
-        laserLog(sprintf('ERROR: %s at %s line %d', err.message, err.stack(1).name, err.stack(1).line));
+        laserLog(sprintf('ERROR: %s at %s line %d (trial=%d)', err.message, err.stack(1).name, ...
+            err.stack(1).line, lhf.runningTrial()));
     end
 end
 
 function laserLog(message)
-    global BpodSystem
-    [folder, name] = fileparts(BpodSystem.Path.CurrentDataFile);
-    fid = fopen(fullfile(folder, [name '_laser_log.txt']), 'a');
+    fid = fopen(lhf.sessionFile('laser_log.txt'), 'a');
     if fid < 0, return; end
     fprintf(fid, '[%s] %s\n', char(datetime('now', 'Format', 'HH:mm:ss.SSS')), message);
     fclose(fid);

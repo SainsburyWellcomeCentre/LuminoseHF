@@ -144,6 +144,10 @@ results.intensity_at_camera = intensities;
 results.illumMask            = illumMask;
 results.saturated           = saturated;
 results.timestamp           = stamp;
+results.calibrationFile     = calCsvPath;   % the table sessions convert irradiance with
+results.laser               = laser.record();   % identity, limits, every command sent
+results.camera              = cam.record();     % exposure, averaging, ROI
+results.provenance = lhf.provenance(luminose);  % code, config and computer it was made with
 save(matPath, 'results');
 
 exportgraphics(fig, pngPath, 'Resolution', 150);

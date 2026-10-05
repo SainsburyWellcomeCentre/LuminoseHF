@@ -6,13 +6,17 @@ function fid = saveFiducial(file, entry)
 %   entry: struct with any of frame (the camera frame, uint16, full sensor),
 %   xy ([x y] of the mark in camera pixels, [] after an automatic alignment),
 %   exposureMs, roi, registrationFile, stageUm ([x y z] when the stages were
-%   connected) and alignment (lhf.cam.align's result, without its frame);
-%   missing fields are saved empty, and the time is added. The file holds
+%   connected), stageCalibrationFile (the stage-camera calibration in force)
+%   and alignment (lhf.cam.align's result, without its frame); missing fields
+%   are saved empty, and the time and code (LuminoseHF's commit and
+%   uncommitted changes, lhf.provenance) are added. The file holds
 %   fiducial: animal, reference (the first entry ever saved, never replaced;
 %   later sessions are aligned to it) and sessions (every entry, the
 %   reference first). Returns the updated struct.
 
     entry.time = char(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+    p = lhf.provenance([], {fileparts(fileparts(fileparts(mfilename('fullpath'))))});
+    entry.code = rmfield(p.code, 'diff');  % commit, branch, dirty, status: small
     entry = withAllFields(entry);
     fid = lhf.cam.loadFiducial(file);
     if isempty(fid)
@@ -31,7 +35,8 @@ end
 
 function entry = withAllFields(entry)
 % Every entry has the same fields, in the same order (any other field is dropped)
-    names = {'frame', 'xy', 'exposureMs', 'roi', 'registrationFile', 'stageUm', 'alignment', 'time'};
+    names = {'frame', 'xy', 'exposureMs', 'roi', 'registrationFile', 'stageUm', 'stageCalibrationFile', ...
+        'alignment', 'time', 'code'};
     for k = 1:numel(names)
         if ~isfield(entry, names{k}), entry.(names{k}) = []; end
     end

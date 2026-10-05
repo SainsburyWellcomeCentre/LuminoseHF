@@ -107,6 +107,7 @@ results.yPeakLocs    = yPeakLocs;
 results.cam_px_um    = cam_px_um;
 results.rotAngle_deg = rotAngle_deg;
 results.timestamp    = stamp;
+results.provenance = lhf.provenance(luminose);  % code, config and computer it was made with
 save(matPath, 'results');
 
 imwrite(frame, tiffPath);

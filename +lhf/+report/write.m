@@ -113,12 +113,75 @@ function writeLog(file, s, data, info, name, meta)
         end
     end
 
+    if isfield(data, 'Setup')
+        lines = [lines, reproduceLines(data)];
+    end
+
     fid = fopen(file, 'w', 'n', 'UTF-8');
     if fid < 0
         error('lhf:report:open', 'Cannot open %s for writing.', file);
     end
     closer = onCleanup(@() fclose(fid));
     fprintf(fid, '%s\n', lines{:});
+end
+
+function lines = reproduceLines(data)
+% What the session ran with (Data.Setup, lhf.recordSetup) and how to run it again
+    setup = data.Setup;
+    lines = {'', '## Reproduce', '', ...
+        'Everything below is in the data file; `lhf.recreate(dataFile, folder)` writes it out as files.', ''};
+    lines{end+1} = '| Repository | Commit | State |';
+    lines{end+1} = '|---|---|---|';
+    for r = setup.provenance.code
+        state = 'clean';
+        if isempty(r.commit)
+            state = r.note;
+        elseif r.dirty
+            state = '**uncommitted changes (saved)**';
+        end
+        lines{end+1} = sprintf('| %s | %s | %s |', r.name, r.commit(1:min(end, 10)), state); %#ok<AGROW>
+    end
+    lines{end+1} = '';
+    if isempty(setup.stageUm)
+        lines{end+1} = sprintf('- Stage at START: not read (%s)', escape(setup.stageNote));
+    else
+        lines{end+1} = sprintf('- Stage at START: X %.1f, Y %.1f, Z %.1f µm', setup.stageUm);
+    end
+    if ~isempty(setup.fiducial)
+        lines{end+1} = sprintf('- Fiducial: newest entry %s (reference %s)', setup.fiducial.entry.time, ...
+            setup.fiducial.referenceTime);
+    end
+    cal = setup.calibration;
+    names = {cal.power.newestRun, cal.cameraDmd.file, cal.stageCamera.file, cal.zProfile.file};
+    names = names(~cellfun(@isempty, names));
+    [~, names] = cellfun(@fileparts, names, 'UniformOutput', false);
+    if ~isempty(names)
+        lines{end+1} = ['- Calibrations in force: ' strjoin(names, ', ')];
+    end
+    used = patternsUsed(data);
+    if ~isempty(used)
+        lines{end+1} = ['- Patterns shown (type row: trials): ' used];
+    end
+end
+
+function text = patternsUsed(data)
+% "CSplus r1: 40, CSminus r1: 38" from each trial's Actions.Patterns
+    keys = {};
+    for n = 1:numel(data.RawEvents.Trial)
+        trial = data.RawEvents.Trial{n};
+        if ~isfield(trial, 'Actions') || ~isfield(trial.Actions, 'Patterns'), continue; end
+        for type = fieldnames(trial.Actions.Patterns)'
+            p = trial.Actions.Patterns.(type{1});
+            if isfield(p, 'shown') && p.shown
+                keys{end+1} = sprintf('%s r%d', type{1}, p.row); %#ok<AGROW>
+            end
+        end
+    end
+    text = '';
+    if isempty(keys), return; end
+    [u, ~, k] = unique(keys);
+    counts = accumarray(k(:), 1);
+    text = strjoin(cellfun(@(a, b) sprintf('%s: %d', a, b), u, num2cell(counts'), 'UniformOutput', false), ', ');
 end
 
 function t = textOr(s, field, default)

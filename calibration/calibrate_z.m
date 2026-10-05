@@ -90,6 +90,9 @@ results.nominalFocus_um       = FOCUS_UM;
 results.zStep_um              = zStep_um;
 results.startPos_um           = startPos_um;
 results.timestamp             = stamp;
+results.stage                 = zaber.record();   % axis, limits, every move
+results.camera                = cam.record();     % exposure, averaging, ROI
+results.provenance = lhf.provenance(luminose);  % code, config and computer it was made with
 save(matPath, 'results');
 
 exportgraphics(fig, pngPath, 'Resolution', 150);

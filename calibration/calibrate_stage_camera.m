@@ -61,7 +61,8 @@ stageCamera.startUm = startUm;
 outDir = fullfile(char(luminose.f.luminoseData), 'calibration');
 if ~isfolder(outDir), mkdir(outDir); end
 matPath = fullfile(outDir, ['stage_camera_' stageCamera.timestamp '.mat']);
-save(matPath, 'stageCamera');
+provenance = lhf.provenance(luminose);  % code, config and computer it was made with
+save(matPath, 'stageCamera', 'provenance');
 fprintf('Saved %s\n', matPath);
 clear closer  % releases the stages and the camera (a script's onCleanup only fires when cleared)
 

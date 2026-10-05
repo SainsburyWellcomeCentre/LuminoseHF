@@ -147,6 +147,7 @@ classdef DesignerCameraPanel < handle
                 try obj.Dmd.disconnect(); catch, end
             end
             if ~isempty(obj.Stages)
+                if isappdata(0, 'lhfStages'), rmappdata(0, 'lhfStages'); end
                 try obj.Stages.close(); catch, end
             end
         end
@@ -238,7 +239,8 @@ classdef DesignerCameraPanel < handle
             end
             entry = struct('frame', obj.Frame, 'xy', obj.MarkXY, ...
                 'exposureMs', obj.Camera.ExposureMs, 'roi', obj.Camera.Roi, ...
-                'registrationFile', registrationFile(obj.Registration), 'stageUm', obj.stagePositions());
+                'registrationFile', registrationFile(obj.Registration), 'stageUm', obj.stagePositions(), ...
+                'stageCalibrationFile', registrationFile(obj.StageCalibration));
             file = obj.fiducialFile();
             if isempty(file), obj.setLive(wasLive); return; end
             if obj.guard(@() obj.storeFiducial(file, entry))
@@ -293,7 +295,8 @@ classdef DesignerCameraPanel < handle
             if strcmp(result.status, 'aligned')
                 entry = struct('frame', result.frame, 'xy', [], 'exposureMs', obj.Camera.ExposureMs, ...
                     'roi', obj.Camera.Roi, 'registrationFile', registrationFile(obj.Registration), ...
-                    'stageUm', result.endUm, 'alignment', rmfield(result, 'frame'));
+                    'stageUm', result.endUm, 'stageCalibrationFile', registrationFile(obj.StageCalibration), ...
+                    'alignment', rmfield(result, 'frame'));
                 file = obj.fiducialFile();
                 if ~isempty(file)
                     obj.guard(@() obj.storeFiducial(file, entry));
@@ -641,6 +644,9 @@ classdef DesignerCameraPanel < handle
 
         function connectStages(obj)
             obj.Stages = obj.Options.makeStages();
+            % A session reads the stage position through these (lhf.stagePosition):
+            % the port can be opened only once
+            setappdata(0, 'lhfStages', obj.Stages);
         end
 
         function um = stagePositions(obj)

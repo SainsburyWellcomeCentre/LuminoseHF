@@ -91,6 +91,13 @@ classdef OdourDeliveryTest < matlab.unittest.TestCase
             tc.verifyEqual(S.GUI.delivered_dutyCycles.cue, [bottle 0.5]);
             tc.verifyNumElements(delivery.Deliveries, 1);
             tc.verifyFalse(isfile([BpodSystem.Path.CurrentDataFile '_olfactometer_errors.txt']));
+            d = BpodSystem.Data.OdourDeliveries;   % with the trial it belongs to
+            tc.verifyEqual([d.Trial, d.Valves], [1 3 4]);
+            tc.verifyEqual(d.Duty, [bottle 0.5]);
+            tc.verifyTrue(d.Ok);
+            BpodSystem.Data.nTrials = 4;
+            lhf.olf.deliver(1, S, lhf.protocolInfo('goNogo'), []);
+            tc.verifyEqual(BpodSystem.Data.OdourDeliveries(2).Trial, 5);
         end
 
         function aBadRowIsLoggedNotThrown(tc)
@@ -103,6 +110,8 @@ classdef OdourDeliveryTest < matlab.unittest.TestCase
             tc.verifyFalse(isfield(S.GUI, 'delivered_odours'));
             text = fileread([BpodSystem.Path.CurrentDataFile '_olfactometer_errors.txt']);
             tc.verifySubstring(text, 'notOdourValve');
+            tc.verifyFalse(BpodSystem.Data.OdourDeliveries.Ok);   % refused ones are recorded too
+            tc.verifySubstring(BpodSystem.Data.OdourDeliveries.Message, 'odour valve');
         end
 
         function closeKeepsTheDeliveries(tc)

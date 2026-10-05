@@ -172,6 +172,7 @@ results.dmdToCameraRatio_gridCol   = dmdToCameraRatio_gridCol;
 results.anisotropyRatio            = anisotropyRatio;
 results.gridAngle_deg              = gridAngle_deg;
 results.timestamp                  = stamp;
+results.provenance = lhf.provenance(luminose);  % code, config and computer it was made with
 save(matPath, 'results');
 
 exportgraphics(fig, pngPath, 'Resolution', 150);

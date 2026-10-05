@@ -162,12 +162,14 @@ function luminose_hf_powercal
     trialManager = BpodTrialManager;
     [sma, ~, currentActions] = PrepareStateMachine(S, currentTrialType, 1, ITI);
     dmd_hf_powercal('prepare', dmdSoftCodes(sma));
+    currentActions.Patterns = BpodSystem.PluginObjects.PreparedPatterns;  % what the DMD will show
     dmd_hf_powercal('advance');
     BpodSystem.PluginObjects.SelectedOdourRow = BpodSystem.PluginObjects.NextOdourRow;
     sessionStart = datestr(datetime('now'), 'yyyy-mm-dd HH:MM:SS');
     repoDir = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     [~, gitHash] = system(['git -C "' repoDir '" rev-parse HEAD']);
     BpodSystem.Data.GitHash = strtrim(gitHash);
+    BpodSystem.Data.Setup = lhf.recordSetup(luminose, lhf.subjectName());  % code, config, calibrations, stage (lhf.recreate)
     trialManager.startTrial(sma);
 
     %% Main trial loop
@@ -184,6 +186,7 @@ function luminose_hf_powercal
                 nextTrialType = lhf.nextTrialType(BpodSystem.Data, lhf.trialPolicy(S.GUI, info), currentTrialType);
                 [sma, S, nextActions] = PrepareStateMachine(S, nextTrialType, currentTrial+1, ITI);
                 dmd_hf_powercal('prepare', dmdSoftCodes(sma));
+                nextActions.Patterns = BpodSystem.PluginObjects.PreparedPatterns;  % what the DMD will show
                 disp(['Session: ', sessionStart, ' | Trial: ', num2str(currentTrial)]);
                 SendStateMachine(sma, 'RunASAP');
             end
@@ -297,6 +300,7 @@ end
 %% State machine
 function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTrial, ITI)
     global BpodSystem luminose
+    BpodSystem.PluginObjects.PreparingTrial = currentTrial;  % the DMD handler logs it
     for tCell = {'cue', 'CSplus', 'CSminus', 'opto'}
         t = tCell{1};
         probField = sprintf('patternProbs_%s', t);
@@ -501,6 +505,8 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     actions.SetLaserPower = laserAction;
     actions.LaserIrradiance_mWmm2 = irradiance;  % NaN when no pattern is shown
     actions.LaserSetpoint_mW      = setpoint;
+    actions.PatternRows = fieldOrEmpty(BpodSystem.PluginObjects, 'SelectedPatternRow');  % row drawn per type
+    actions.OdourRows   = fieldOrEmpty(BpodSystem.PluginObjects, 'NextOdourRow');        % odour rows drawn per type
 end
 
 function shouldStop = handle_pause_condition(H, R)
@@ -714,4 +720,9 @@ function saveAndClose(fig, fname)
         warning('Could not save %s', fname);
     end
     delete(fig);
+end
+
+function value = fieldOrEmpty(s, name)
+    value = struct();
+    if isfield(s, name), value = s.(name); end
 end

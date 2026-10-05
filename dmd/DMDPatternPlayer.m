@@ -3,7 +3,9 @@ classdef DMDPatternPlayer < handle
 %
 %   Frame rendering and upload happen in the prepare window (while the
 %   previous trial runs), never inside a soft-code callback:
-%     prepareSpots / prepareFrames  build the NEXT trial's sequence per type
+%     prepareSpots / prepareFrames  build the NEXT trial's sequence per type;
+%                                   prepareSpots returns what it prepared
+%                                   (spots as projected, timing) for the record
 %     advance()                     at the trial boundary, next -> current
 %     show(typeName)                soft code: projects the current sequence
 %
@@ -29,7 +31,7 @@ classdef DMDPatternPlayer < handle
 
     properties (Access = private)
         dmd
-        entries = struct('type', {}, 'key', {}, 'seq', {}, 'lastTrial', {})
+        entries = struct('type', {}, 'key', {}, 'seq', {}, 'lastTrial', {}, 'info', {})
         current = struct()
         next = struct()
         trial = 1
@@ -57,23 +59,35 @@ classdef DMDPatternPlayer < handle
             obj.dmd = [];
         end
 
-        function prepareSpots(obj, typeName, design, illuTime_us)
+        function info = prepareSpots(obj, typeName, design, illuTime_us)
+            % info: what the DMD will show, as recorded per trial (Actions.Patterns):
+            % spots (random ones placed), r_px, tickMs, nF, exposureUs, subFrames,
+            % frameUs, synchUs, reused (an identical sequence already on the device)
             spots = design.spots;
             if isfield(spots, 'isFixed') && any(~[spots.isFixed])
                 key = [];
                 spots = placeRandomSpots(spots, design.r_px, obj.Height, obj.Width);
             else
                 key = {spots, design.r_px, design.tickMs, illuTime_us};
-                if obj.reuse(typeName, key), return; end
+                [found, info] = obj.reuse(typeName, key);
+                if found
+                    info.reused = true;
+                    return
+                end
             end
             nSub = max(1, ceil(illuTime_us / obj.MaxFrameUs));
             t = round(illuTime_us / nSub);
             seq = obj.spotSequence(spots, design.r_px, design.tickMs, nSub);
             % Frame-synch pulse (DMD pin 8, gates the laser) spans as much of
             % each frame as the ALP allows; its default is a fraction of it.
-            seq.timing(t, t, 0, obj.synchWidth(t), 0);
+            synch = obj.synchWidth(t);
+            seq.timing(t, t, 0, synch, 0);
             seq.setRepeat(1);
-            obj.add(typeName, key, seq);
+            info = struct('spots', spots, 'r_px', design.r_px, 'tickMs', design.tickMs, ...
+                'nF', ceil(max([spots.onset_ms] + [spots.dur_ms]) / design.tickMs), ...
+                'exposureUs', illuTime_us, 'subFrames', nSub, 'frameUs', t, 'synchUs', synch, ...
+                'reused', false);
+            obj.add(typeName, key, seq, info);
         end
 
         function prepareFrames(obj, typeName, key, buildFrames, timing)
@@ -87,7 +101,7 @@ classdef DMDPatternPlayer < handle
             seq.setBinaryMode(true);
             seq.timing(timing(1), timing(2), timing(3), timing(4), timing(5));
             seq.setRepeat(1);
-            obj.add(typeName, key, seq);
+            obj.add(typeName, key, seq, struct());
         end
 
         function advance(obj)
@@ -139,22 +153,24 @@ classdef DMDPatternPlayer < handle
             fprintf('DMD: %d us frames, synch pulse %d us.\n', t, w);
         end
 
-        function found = reuse(obj, typeName, key)
+        function [found, info] = reuse(obj, typeName, key)
             found = false;
+            info = struct();
             for k = 1:numel(obj.entries)
                 e = obj.entries(k);
                 if strcmp(e.type, typeName) && ~isempty(e.key) && isequaln(e.key, key)
                     obj.entries(k).lastTrial = obj.trial + 1;
                     obj.next.(typeName) = e.seq;
                     found = true;
+                    info = e.info;
                     return
                 end
             end
         end
 
-        function add(obj, typeName, key, seq)
+        function add(obj, typeName, key, seq, info)
             obj.entries(end+1) = struct('type', typeName, 'key', {key}, 'seq', seq, ...
-                                        'lastTrial', obj.trial + 1);
+                                        'lastTrial', obj.trial + 1, 'info', info);
             obj.next.(typeName) = seq;
         end
 

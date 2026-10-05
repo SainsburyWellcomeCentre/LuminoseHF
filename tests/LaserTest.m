@@ -82,7 +82,10 @@ classdef LaserTest < matlab.unittest.TestCase
             tc.verifyEqual(BpodSystem.PluginObjects.LaserQueue, [6 20]);
             tc.verifyEqual(laser.CommandedPowermW, 12.5);
             logText = fileread([BpodSystem.Path.CurrentDataFile '_laser_log.txt']);
-            tc.verifySubstring(logText, 'irradiance=4.00 mW/mm^2 setpoint=12.5 mW');
+            tc.verifySubstring(logText, 'trial=1 irradiance=4.00 mW/mm^2 setpoint=12.5 mW');
+            BpodSystem.Data.nTrials = 6;   % six recorded: the code came from trial 7
+            lhf.laser.onSoftCode();
+            tc.verifySubstring(fileread([BpodSystem.Path.CurrentDataFile '_laser_log.txt']), 'trial=7 ');
         end
 
         function aPowerAboveTheLimitIsLoggedNotThrown(tc)
@@ -105,6 +108,8 @@ classdef LaserTest < matlab.unittest.TestCase
             tc.verifyFalse(isfield(BpodSystem.PluginObjects, 'Laser'));
             tc.verifyEqual(BpodSystem.Data.Laser.Package, 'obis');
             tc.verifyEqual(BpodSystem.Data.Laser.Mode, 'Digital');
+            tc.verifyTrue(isfield(BpodSystem.Data.Laser.statusAtEnd, 'OutputmW'));   % read before closing
+            tc.verifyTrue(isfield(BpodSystem.Data.Laser, 'statusAtStart'));
             lhf.laser.close();   % nothing open: does nothing
         end
 

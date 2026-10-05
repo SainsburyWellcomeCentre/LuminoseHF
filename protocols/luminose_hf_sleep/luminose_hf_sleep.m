@@ -142,6 +142,7 @@ function luminose_hf_sleep
     repoDir = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     [~, gitHash] = system(['git -C "' repoDir '" rev-parse HEAD']);
     BpodSystem.Data.GitHash = strtrim(gitHash);
+    BpodSystem.Data.Setup = lhf.recordSetup(luminose, lhf.subjectName());  % code, config, calibrations, stage (lhf.recreate)
     trialManager.startTrial(sma);
 
     %% Main trial loop
@@ -322,6 +323,9 @@ function [sma, S, actions] = PrepareStateMachine(S, trialTypes, currentTrial, st
     actions.GetSniff    = sniffAction;
     actions.DeliverStim = stimAction;
     actions.ITI = {'BNC1', 1};
+    actions.PatternRows = BpodSystem.PluginObjects.SelectedPatternRow;  % row drawn per type
+    % The opto design of the drawn row (the DMD runs through parfeval here)
+    actions.Patterns = struct('opto', lhf.selectedDesign('opto'));
 end
 
 %% Handle pause condition

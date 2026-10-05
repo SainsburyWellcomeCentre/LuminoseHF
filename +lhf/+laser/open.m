@@ -15,7 +15,9 @@ function on = open(S, luminose)
 %   with a message saying to untick Laser control to run without it.
 %
 %   Sets BpodSystem.PluginObjects.Laser (the obis.Laser, or absent) and an
-%   empty LaserQueue. Close with lhf.laser.close.
+%   empty LaserQueue, and reads the laser's status (output, temperature,
+%   codes: obis.Laser.status) for the record lhf.laser.close keeps. Close
+%   with lhf.laser.close.
 
     global BpodSystem
 
@@ -35,10 +37,20 @@ function on = open(S, luminose)
         laser.setMode('Digital');
         laser.setEnabled(true);
         BpodSystem.PluginObjects.Laser = laser;
+        BpodSystem.PluginObjects.LaserStatusAtStart = readStatus(laser);
     catch err
         error('lhf:laser:connect', ['Laser control is on but the laser did not connect (%s): %s\n' ...
             'Untick Laser control on the Task tab to run without the laser.'], ...
             char(luminose.laser.port), err.message);
     end
     fprintf('Laser connected on %s: power set per trial from each pattern''s design.\n', char(luminose.laser.port));
+end
+
+function s = readStatus(laser)
+% The laser's status now, or the reason it could not be read
+    try
+        s = laser.status();
+    catch err
+        s = struct('error', err.message);
+    end
 end

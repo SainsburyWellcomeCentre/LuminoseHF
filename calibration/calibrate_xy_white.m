@@ -133,6 +133,7 @@ results.pRow     = pRow;
 results.pCol     = pCol;
 results.corners  = corners;
 results.timestamp = stamp;
+results.provenance = lhf.provenance(luminose);  % code, config and computer it was made with
 save(matPath, 'results');
 
 imwrite(frame, tiffPath);

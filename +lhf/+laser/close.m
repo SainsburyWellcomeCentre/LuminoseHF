@@ -7,7 +7,9 @@ function close(keepRecord)
 %   Safe to call when the laser was never opened. Called from each
 %   protocol's cleanup, and by lhf.laser.open before connecting. The laser's
 %   obis record (identity, limits, every command with its time and latency)
-%   is kept in BpodSystem.Data.Laser before it is disconnected.
+%   is kept in BpodSystem.Data.Laser before it is disconnected, with
+%   statusAtStart and statusAtEnd (obis.Laser.status: output and setpoint mW,
+%   baseplate temperature, status and fault codes).
 
     global BpodSystem
 
@@ -20,9 +22,20 @@ function close(keepRecord)
     laser = BpodSystem.PluginObjects.Laser;
     if isa(laser, 'obis.Laser') && isvalid(laser)
         if keepRecord
-            BpodSystem.Data.Laser = laser.record();
+            record = laser.record();
+            record.statusAtStart = [];
+            if isfield(BpodSystem.PluginObjects, 'LaserStatusAtStart')
+                record.statusAtStart = BpodSystem.PluginObjects.LaserStatusAtStart;
+            end
+            try
+                record.statusAtEnd = laser.status();
+            catch err
+                record.statusAtEnd = struct('error', err.message);
+            end
+            BpodSystem.Data.Laser = record;
         end
         laser.disconnect();  % emission off, frees the port; never throws
     end
-    BpodSystem.PluginObjects = rmfield(BpodSystem.PluginObjects, 'Laser');
+    BpodSystem.PluginObjects = rmfield(BpodSystem.PluginObjects, intersect({'Laser', ...
+        'LaserStatusAtStart'}, fieldnames(BpodSystem.PluginObjects)));
 end
