@@ -1,11 +1,11 @@
 # Architecture
 
-How a luminose_hf session is put together, and why. Read this before changing the trial loop, trial selection, scoring, the live plots, odour delivery or settings loading.
+How a LuminoseHF session is put together, and why. Read this before changing the trial loop, trial selection, scoring, the live plots, odour delivery or settings loading.
 
 ## The layout
 
 ```
-luminose_hf/
+LuminoseHF/
   LuminoseConstants.m        rig configuration (luminose_config.yaml beside it)
   +lhf/                      code shared by the protocols (below)
   protocols/luminose_hf_<name>/

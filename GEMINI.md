@@ -1,6 +1,6 @@
 # Luminose HF Project Overview
 
-`luminose_hf` is a MATLAB codebase for head-fixed mouse behavioural experiments. It combines Bpod task control, DMD-based patterned stimulation, NI-DAQ driven odour delivery, and optional Bonsai video acquisition.
+`LuminoseHF` is a MATLAB codebase for head-fixed mouse behavioural experiments. It combines Bpod task control, DMD-based patterned stimulation, NI-DAQ driven odour delivery, and optional Bonsai video acquisition.
 
 ## Core technologies
 

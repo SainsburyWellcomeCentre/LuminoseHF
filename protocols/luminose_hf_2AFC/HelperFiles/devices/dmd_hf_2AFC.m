@@ -17,7 +17,7 @@ function dmd_hf_2AFC(code, codes)
 %   Sequences are shown in MASTER mode (immediate). Code 11 halts projection
 %   (no blank sequence, so no extra synch pulse).
 %
-%   Log: <luminose_hf repo root>/dmd_hf_2AFC_log.txt
+%   Log: <LuminoseHF repo root>/dmd_hf_2AFC_log.txt
 
     persistent player
 

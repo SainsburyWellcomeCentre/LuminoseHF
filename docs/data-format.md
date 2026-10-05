@@ -1,6 +1,6 @@
 # Data format
 
-What a luminose_hf session writes. Bpod's own fields (`RawEvents`, `RawData`, `TrialStartTimestamp`, `TrialEndTimestamp`, `Info`, ...) are as Bpod documents them; this page lists what the protocols add.
+What a LuminoseHF session writes. Bpod's own fields (`RawEvents`, `RawData`, `TrialStartTimestamp`, `TrialEndTimestamp`, `Info`, ...) are as Bpod documents them; this page lists what the protocols add.
 
 ## Files
 

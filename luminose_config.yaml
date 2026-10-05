@@ -9,7 +9,7 @@ paths:
 
 # Bpod behavioral system configuration
 bpod:
-  protocols: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\protocols"
+  protocols: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\protocols"
   protocolFile: "luminose_hf_goNogo.m"
   dataPath: "D:\\luminoseData\\rawdata"
     
@@ -23,10 +23,10 @@ olfactometer:
   postSequenceTime: 0.001
   
   # Configuration files
-  distanceFile: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\olfactometer\\canberra_all.csv"
-  mapFile: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\olfactometer\\canberra_all_mds.csv"
-  odourChemicalsFile: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\olfactometer\\odour_chemicals.tsv"
-  odourBottlesFile: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\olfactometer\\odour_bottles.tsv"
+  distanceFile: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\olfactometer\\canberra_all.csv"
+  mapFile: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\olfactometer\\canberra_all_mds.csv"
+  odourChemicalsFile: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\olfactometer\\odour_chemicals.tsv"
+  odourBottlesFile: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\olfactometer\\odour_bottles.tsv"
   
   # Back valves configuration
   backValves:
@@ -68,7 +68,7 @@ dmd:
   # method — the two methods disagree by ~4.8%; worth rechecking if it recurs)
   projectedDMDlength: 2.2046
   spotSide: 0.1
-  patternsFolder: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\dmd\\Patterns"
+  patternsFolder: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\dmd\\Patterns"
 
 # OBIS laser remote configuration
 laser:
@@ -106,4 +106,4 @@ bonsai:
   launch_bonsai: false
   exePath: "C:\\Users\\harrislab\\AppData\\Local\\Bonsai\\bonsai.exe"
   # exePath: "/home/username/.local/share/Bonsai/bonsai"  # Linux/Mac example
-  workflowPath: "C:\\Users\\harrislab\\MATLAB\\luminose_hf\\bonsai\\BehaviourCamerasAcquisition.bonsai"
+  workflowPath: "C:\\Users\\harrislab\\MATLAB\\LuminoseHF\\bonsai\\BehaviourCamerasAcquisition.bonsai"

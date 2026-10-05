@@ -1,4 +1,4 @@
-# luminose_hf
+# LuminoseHF
 
 MATLAB codebase for head-fixed mouse behaviour with patterned optogenetics, odour delivery, and Bpod-controlled task logic.
 
@@ -25,7 +25,7 @@ Install [git](https://git-scm.com/downloads) and [MATLAB](https://uk.mathworks.c
 
 ```bash
 cd <parent directory>
-git clone https://github.com/SainsburyWellcomeCentre/luminose.git
+git clone https://github.com/SainsburyWellcomeCentre/LuminoseHF.git
 ```
 
 3. Add the parent directory and its subfolders to the MATLAB path.
