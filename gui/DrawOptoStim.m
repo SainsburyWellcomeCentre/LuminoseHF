@@ -13,12 +13,13 @@ function DrawOptoStim(Params)
     height = 0.30;
     pulseTop = 0.92;
 
-    timingFields = {'CueTime','StimTime','ResponseTime','ErrorDelay','InterTrialInterval'};
-    if all(isfield(Params, timingFields))
-        totalTrial = Params.CueTime + Params.StimTime + Params.ResponseTime + ...
-                     Params.ErrorDelay + Params.InterTrialInterval;
-    elseif isfield(Params, 'ITImax')
+    % sleep: its ITI; a behaviour protocol: its trial as the trial-structure
+    % preview last drew it (cue and stimulus durations come from their
+    % designs, sequences or panels, lhf.stimDuration)
+    if isfield(Params, 'ITImax')
         totalTrial = Params.ITImax;
+    elseif isfield(BpodSystem.GUIData.ParameterGUI, 'TrialDuration')
+        totalTrial = BpodSystem.GUIData.ParameterGUI.TrialDuration;
     else
         totalTrial = 10;
     end

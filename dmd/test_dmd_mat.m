@@ -14,7 +14,7 @@
 %% -------------------------------------------------------------------------
 %  CONFIGURATION — edit these before running
 %% -------------------------------------------------------------------------
-META_FILE       = 'designed_opto_r1_20260518_185815_meta.mat';
+META_FILE       = 'designed_powercal_r1_20261001_152909_meta.mat';
                   % Full path to a _meta.mat file, OR leave '' to auto-pick:
 PATTERN_TYPE    = 'CSminus';   % used only when META_FILE is empty
 ILLUMINATION_US = 500;        % µs on-time per frame; increase for brighter
@@ -100,7 +100,8 @@ drawnow;
 seq = dmd.device.allocSequence(1, 1);
 seq.put(0, 1, img);
 seq.setBinaryMode(true);
-seq.timing(ILLUMINATION_US, ILLUMINATION_US, 0, 0, 0);
+w = setFrameTiming(seq, ILLUMINATION_US);  % synch pulse (pin 8, gates the laser) as long as the ALP allows
+fprintf('Frame %d us, synch pulse %d us.\n', round(ILLUMINATION_US), w);
 seq.setRepeat(0);   % 0 = loop forever
 
 C = DMDController.Constants;

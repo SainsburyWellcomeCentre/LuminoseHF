@@ -30,7 +30,7 @@ switch action
 
         % Plot all completed trials
         for i = 1:nDone
-            side    = getTrialSide_hf_2AFC(data, i);            
+            side    = data.TrialTypes(i) == 1;
             xPrev(end+1) = i; yPrev(end+1) = side;
         end
 

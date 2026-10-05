@@ -151,8 +151,8 @@ for k = 1:nFrames
 end
 seq.setBinaryMode(true);
 t = round(ILLUMINATION_US);
-seq.timing(t, t, 0, 0, 0);
-fprintf('Upload complete. Illumination: %d µs/frame\n\n', t);
+w = setFrameTiming(seq, t);  % synch pulse (pin 8, gates the laser) as long as the ALP allows
+fprintf('Upload complete. Illumination: %d µs/frame, synch pulse %d µs\n\n', t, w);
 
 %% -------------------------------------------------------------------------
 %  Arm and play.

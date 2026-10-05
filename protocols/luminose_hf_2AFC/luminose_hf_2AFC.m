@@ -7,25 +7,24 @@ function luminose_hf_2AFC
     luminose = LuminoseConstants();
     beep('off'); % native matlab error sounds OFF
     BpodSystem.SoftCodeHandlerFunction = 'SoftCodeHandler_luminose_hf_2AFC';
+
+    olfWarmup = lhf.olf.startWorker(luminose.olfactometer);  % warms up while the GUI is open
     [dataDir, dataBasename, ~] = fileparts(BpodSystem.Path.CurrentDataFile);
     log_file = fullfile(dataDir, [regexprep(dataBasename, '_Session\d+$', '') '_log.txt']);
     diary(log_file);
 
     %% Configure trials
-    S = BpodSystem.ProtocolSettings;
-    isNewSession = ~isstruct(S) || isempty(fieldnames(S));
-    if isNewSession
-        GUIparams_luminose_hf_2AFC();
+    % Defaults come from GUIparams; a saved settings file is merged into them
+    % (renamed and retired settings: lhf.settingsHistory)
+    saved = BpodSystem.ProtocolSettings;
+    S = struct();
+    GUIparams_luminose_hf_2AFC();
+    settingsNotes = {};
+    if ~isstruct(saved) || isempty(fieldnames(saved))
         restorePatternParams({'cue', 'Left', 'Right', 'opto'}, luminose.dmd.patternsFolder);
     else
-        SavedGUI = S.GUI;
-        GUIparams_luminose_hf_2AFC();
-        fNames = fieldnames(SavedGUI);
-        for i = 1:numel(fNames)
-            if isfield(S.GUI, fNames{i})
-                S.GUI.(fNames{i}) = SavedGUI.(fNames{i});
-            end
-        end
+        [S, settingsNotes] = lhf.mergeSettings(saved, S, '2AFC');
+        cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
     LuminoseParameterGUI_hf_2AFC('init', S);
     disp('Waiting for START button...');
@@ -39,13 +38,25 @@ function luminose_hf_2AFC
     S.GUI = BpodSystem.GUIData.ParameterGUI.LatestGUIParams;
     S = LuminoseParameterGUI_hf_2AFC('sync', S);
     disp('START pressed — beginning experiment.');
+    lhf.olf.waitWorker(olfWarmup);  % one warmed-up worker for odour delivery
+    sessionCleanup = onCleanup(@cleanup); %#ok<NASGU> runs on normal end and on any error
+    BpodSystem.Data.SettingsNotes = settingsNotes;
+    % One seed per session, recorded; S.RandomSeed (edit the settings file)
+    % repeats a session's draws once, then is cleared
+    requestedSeed = [];
+    if isfield(S, 'RandomSeed'), requestedSeed = S.RandomSeed; end
+    S.RandomSeed = [];
+    BpodSystem.Data.RandomSeed = lhf.random('init', requestedSeed);
+    info = lhf.protocolInfo('2AFC');
+    % Optional laser: connected only with Laser control ticked (Task tab)
+    lhf.laser.open(S, luminose);
 
     BpodSystem.Data.TrialResponse = [];
     BpodSystem.Data.SniffInhalationOnset_s  = [];
     BpodSystem.Data.SniffInhalationOffset_s = [];
     BpodSystem.Data.TrialOutcome = [];
 
-    nextTrialType = getNextTrialType_hf_2AFC(BpodSystem.Data, S);
+    nextTrialType = lhf.nextTrialType(BpodSystem.Data, lhf.trialPolicy(S.GUI, info), []);
     currentTrialType = nextTrialType;
 
     cue = S.GUIMeta.CueType.String{S.GUI.CueType};
@@ -59,7 +70,7 @@ function luminose_hf_2AFC
         if S.GUI.VariableITI
             ITI = S.GUI.InterTrialInterval * (1.01 .^ (0:S.GUI.maxTrials-1));
             ITI(ITI > S.GUI.MaxITI) = S.GUI.MaxITI;
-            ITI = ITI(randperm(length(ITI)))';
+            ITI = ITI(randperm(lhf.random(), length(ITI)))';
             ITI = round(ITI * 1000) / 1000;
         else
             ITI = S.GUI.InterTrialInterval * ones(1, S.GUI.maxTrials);
@@ -67,31 +78,13 @@ function luminose_hf_2AFC
     end
 
     %% Begin plotting
-    BpodSystem.ProtocolFigures.OutcomePlot = figure('Position', [30 1035 1000 350], ...
-        'name', 'Outcome Plot', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on');
-    BpodSystem.GUIHandles.OutcomeAxes = axes('Position', [.06 .15 .92 .8]);
-    BpodSystem.GUIHandles.OutcomeAxes.LooseInset = BpodSystem.GUIHandles.OutcomeAxes.TightInset;
-    liveOutcomePlot_hf_2AFC(BpodSystem.GUIHandles.OutcomeAxes, 'init', BpodSystem.Data, currentTrialType);
-
-    BpodSystem.ProtocolFigures.AccuracyPlot = figure('Position', [1040 1035 350 350], ...
-        'name', 'Accuracy Plot', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on');
-    BpodSystem.GUIHandles.AccuracyAxes = axes('Position', [.15 .12 .8 .8]);
-    liveAccuracyPlot_hf_2AFC(BpodSystem.GUIHandles.AccuracyAxes, 'init', []);
-
-    BpodSystem.ProtocolFigures.RewardPlot = figure('Position', [1040 645 350 350], ...
-        'name', 'Reward Plot', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on');
-    BpodSystem.GUIHandles.RewardAxes = axes('Position', [.15 .12 .8 .8]);
-    liveRewardPlot_hf_2AFC(BpodSystem.GUIHandles.RewardAxes, 'init', []);
-
-    BpodSystem.ProtocolFigures.ResponsePlot = figure('Position', [1400 645 350 350], ...
-        'name', 'Response Time Plot', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on');
-    BpodSystem.GUIHandles.ResponseAxes = axes('Position', [.15 .12 .8 .8]);
-    liveResponseTimePlot_hf_2AFC(BpodSystem.GUIHandles.ResponseAxes, 'init', []);
-
-    BpodSystem.ProtocolFigures.EncoderPlot = figure('Position', [1400 1035 350 350], ...
-        'name', 'Encoder Plot', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on');
-    BpodSystem.GUIHandles.EncoderAxes = axes('Position', [.15 .15 .8 .8]);
-    liveEncoderPlot_hf_2AFC(BpodSystem.GUIHandles.EncoderAxes, 'init', 0);
+    % All live plots share one window: one graphics canvas instead of five
+    [BpodSystem.ProtocolFigures.LivePlots, plotAxes] = lhf.plot.createFigure();
+    lhf.plot.outcome(plotAxes.Outcome, 'init', info, currentTrialType);
+    lhf.plot.accuracy(plotAxes.Accuracy, 'init', info);
+    lhf.plot.reward(plotAxes.Reward, 'init');
+    lhf.plot.responseTime(plotAxes.Response, 'init');
+    lhf.plot.encoder(plotAxes.Encoder, 'init', 0);
 
     BpodNotebook('init');
 
@@ -105,7 +98,6 @@ function luminose_hf_2AFC
     BpodSystem.FlexIOConfig.channelTypes = channelTypes;
 
     sniffDetector = SniffDetector(chanSniff, 500);
-    sniffDetector.risingEdge = logical(S.GUI.SniffRising);
     sniffDetector.configure(S.GUI.SniffOnsetThreshold, S.GUI.SniffOffsetThreshold);
 
     BpodSystem.startAnalogViewer;
@@ -128,13 +120,13 @@ function luminose_hf_2AFC
     H.SamplingRate = sf;
     errorSound = GenerateWhiteNoise(sf, S.GUI.NoiseTime, 1, 2);
     H.load(1, errorSound);
-    cueSound = GenerateSineWave(sf, S.GUI.Freq_cue, S.GUI.CueTime);
+    cueSound = GenerateSineWave(sf, S.GUI.Freq_cue, S.GUI.SoundDuration_cue);
     H.load(2, cueSound);
-    TimeSoundLeft = 0:1/sf:S.GUI.StimTime;
-    LeftSound = chirp(TimeSoundLeft, S.GUI.LowFreq_Left, S.GUI.CueTime, S.GUI.HighFreq_Left);
+    TimeSoundLeft = 0:1/sf:S.GUI.SoundDuration_Left;
+    LeftSound = chirp(TimeSoundLeft, S.GUI.LowFreq_Left, S.GUI.SoundDuration_Left, S.GUI.HighFreq_Left);
     H.load(3, LeftSound);
-    TimeSoundRight = 0:1/sf:S.GUI.StimTime;
-    RightSound = chirp(TimeSoundRight, S.GUI.LowFreq_Right, S.GUI.CueTime, S.GUI.HighFreq_Right);
+    TimeSoundRight = 0:1/sf:S.GUI.SoundDuration_Right;
+    RightSound = chirp(TimeSoundRight, S.GUI.LowFreq_Right, S.GUI.SoundDuration_Right, S.GUI.HighFreq_Right);
     H.load(4, RightSound);
 
     H.HeadphoneAmpEnabled = true; H.HeadphoneAmpGain = 63;
@@ -155,8 +147,12 @@ function luminose_hf_2AFC
     R.startUSBStream;
 
     %% Prepare and start first trial
+    saveOnlinePlotsOnClose();
     trialManager = BpodTrialManager;
     [sma, ~, currentActions] = PrepareStateMachine(S, currentTrialType, 1, ITI);
+    dmd_hf_2AFC('prepare', dmdSoftCodes(sma));
+    dmd_hf_2AFC('advance');
+    BpodSystem.PluginObjects.SelectedOdourRow = BpodSystem.PluginObjects.NextOdourRow;
     sessionStart = datestr(datetime('now'), 'yyyy-mm-dd HH:MM:SS');
     repoDir = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     [~, gitHash] = system(['git -C "' repoDir '" rev-parse HEAD']);
@@ -171,18 +167,20 @@ function luminose_hf_2AFC
 
             currentTrialType = nextTrialType;
 
-            if handle_pause_condition(H, R); break; end
+            if handle_pause_condition(H, R), BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial); break; end
 
             if currentTrial < S.GUI.maxTrials
-                BpodSystem.Data.TrialTypes(currentTrial) = currentTrialType;
-                nextTrialType = getNextTrialType_hf_2AFC(BpodSystem.Data, S);
+                nextTrialType = lhf.nextTrialType(BpodSystem.Data, lhf.trialPolicy(S.GUI, info), currentTrialType);
                 [sma, S, nextActions] = PrepareStateMachine(S, nextTrialType, currentTrial+1, ITI);
+                dmd_hf_2AFC('prepare', dmdSoftCodes(sma));
                 disp(['Session: ', sessionStart, ' | Trial: ', num2str(currentTrial)]);
                 SendStateMachine(sma, 'RunASAP');
             end
 
             RawEvents = trialManager.getTrialData;
-            if handle_pause_condition(H, R); break; end
+            dmd_hf_2AFC('advance');
+            BpodSystem.PluginObjects.SelectedOdourRow = BpodSystem.PluginObjects.NextOdourRow;  % odour rows of the trial now starting
+            if handle_pause_condition(H, R), BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial); break; end
 
             t2 = tic;
             if strcmp(S.GUIMeta.ResponseType.String(S.GUI.ResponseType), 'Rotary Encoder')
@@ -196,9 +194,11 @@ function luminose_hf_2AFC
 
             if ~isempty(fieldnames(RawEvents))
                 BpodSystem.Data = AddTrialEvents(BpodSystem.Data, RawEvents);
-                BpodSystem.Data.TrialSettings(currentTrial) = S;
+                BpodSystem.Data.TrialSettings(currentTrial).GUI = S.GUI;
                 BpodSystem.Data.RawEvents.Trial{currentTrial}.Actions = currentActions;
                 BpodSystem.Data.TrialTypes(currentTrial) = currentTrialType;
+                BpodSystem.Data.LaserIrradiance_mWmm2(currentTrial) = currentActions.LaserIrradiance_mWmm2;
+                BpodSystem.Data.LaserSetpoint_mW(currentTrial) = currentActions.LaserSetpoint_mW;
 
                 processedEvents = BpodSystem.Data.RawEvents.Trial{currentTrial};
                 BpodSystem.Data.SniffInhalationOnset_s(currentTrial)  = sniffDetector.getOnset(processedEvents);
@@ -206,15 +206,8 @@ function luminose_hf_2AFC
                 disp(['Sniff onset: ' num2str(BpodSystem.Data.SniffInhalationOnset_s(currentTrial), '%.3f') ...
                       ' s  offset: ' num2str(BpodSystem.Data.SniffInhalationOffset_s(currentTrial), '%.3f') ' s']);
 
-                outcome = getTrialOutcome_hf_2AFC(BpodSystem.Data, currentTrial);
-                BpodSystem.Data.TrialOutcome(currentTrial) = outcome;
-                events = BpodSystem.Data.RawEvents.Trial{currentTrial}.Events;
-                if isfield(events, 'BNC1High') && isfield(events, 'BNC2High')
-                    if events.BNC1High(1) < events.BNC2High(1), BpodSystem.Data.TrialResponse(currentTrial) = 1;
-                    else, BpodSystem.Data.TrialResponse(currentTrial) = 2; end
-                elseif isfield(events, 'BNC1High'), BpodSystem.Data.TrialResponse(currentTrial) = 1;
-                elseif isfield(events, 'BNC2High'), BpodSystem.Data.TrialResponse(currentTrial) = 2;
-                else, BpodSystem.Data.TrialResponse(currentTrial) = NaN; end
+                [BpodSystem.Data.TrialOutcome(currentTrial), BpodSystem.Data.TrialResponse(currentTrial)] = ...
+                    lhf.scoreTrial(BpodSystem.Data.RawEvents.Trial{currentTrial}, currentTrialType, info.task);
 
                 BpodSystem.Data = BpodNotebook('sync', BpodSystem.Data);
 
@@ -229,19 +222,19 @@ function luminose_hf_2AFC
                 BpodSystem.Data.EncoderData{currentTrial} = R.readUSBStream(0);
 
                 t3 = tic;
-                liveOutcomePlot_hf_2AFC(BpodSystem.GUIHandles.OutcomeAxes, 'update', BpodSystem.Data, nextTrialType);
+                lhf.plot.outcome(plotAxes.Outcome, 'update', BpodSystem.Data, nextTrialType);
                 disp(['Updated outcome plot: ', num2str(toc(t3))]);
 
                 t4 = tic;
-                liveAccuracyPlot_hf_2AFC(BpodSystem.GUIHandles.AccuracyAxes, 'update', BpodSystem.Data);
+                lhf.plot.accuracy(plotAxes.Accuracy, 'update', BpodSystem.Data);
                 disp(['Updated accuracy plot: ', num2str(toc(t4))]);
 
                 t5 = tic;
-                liveRewardPlot_hf_2AFC(BpodSystem.GUIHandles.RewardAxes, 'update', BpodSystem.Data);
+                lhf.plot.reward(plotAxes.Reward, 'update', BpodSystem.Data);
                 disp(['Updated reward plot: ', num2str(toc(t5))]);
 
                 t6 = tic;
-                liveResponseTimePlot_hf_2AFC(BpodSystem.GUIHandles.ResponseAxes, 'update', BpodSystem.Data);
+                lhf.plot.responseTime(plotAxes.Response, 'update', BpodSystem.Data);
                 disp(['Updated response time plot: ', num2str(toc(t6))]);
 
                 t7 = tic;
@@ -262,18 +255,19 @@ function luminose_hf_2AFC
                     BpodSystem.Data.EncoderData{currentTrial}.EventTimestamps - TrialStartTime;
 
                 TrialDuration = BpodSystem.Data.TrialEndTimestamp(currentTrial) - BpodSystem.Data.TrialStartTimestamp(currentTrial);
-                liveEncoderPlot_hf_2AFC(BpodSystem.GUIHandles.EncoderAxes, 'update', 0, BpodSystem.Data.EncoderData{currentTrial}, TrialDuration);
+                lhf.plot.encoder(plotAxes.Encoder, 'update', 0, BpodSystem.Data.EncoderData{currentTrial}, TrialDuration);
                 disp(['Updated rotary encoder plot: ', num2str(toc(t7))]);
+                drawnow nocallbacks  % one redraw of the live-plot window per trial
 
                 t8 = tic;
-                SaveBpodSessionData;
-                SaveOnlinePlots;
+                if mod(currentTrial, 5) == 0, SaveBpodSessionData; end
                 disp(['Saved data: ', num2str(toc(t8))]);
             end
             if currentTrial < S.GUI.maxTrials
                 currentActions = nextActions;
             end
         catch ME
+            BpodSystem.Data.StoppedReason = lhf.stopRecord('error', currentTrial, ME);
             disp('=== CRASH ===');
             disp(ME.message);
             for iStack = 1:length(ME.stack)
@@ -282,12 +276,14 @@ function luminose_hf_2AFC
             break
         end
     end
-    cleanup;
+    if ~isfield(BpodSystem.Data, 'StoppedReason')
+        BpodSystem.Data.StoppedReason = lhf.stopRecord('completed', S.GUI.maxTrials);
+    end
 end
 
 %% State machine
 function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTrial, ITI)
-    global BpodSystem
+    global BpodSystem luminose
     for tCell = {'cue', 'Left', 'Right', 'opto'}
         t = tCell{1};
         probField = sprintf('patternProbs_%s', t);
@@ -305,10 +301,15 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
             BpodSystem.PluginObjects.SelectedPatternRow.(t) = rowIdx;
         end
     end
+    % Odour rows of this trial, drawn now so its states are timed by them
+    BpodSystem.PluginObjects.NextOdourRow = lhf.olf.drawRows(S.GUI, {'cue', 'Left', 'Right'});
     cue = S.GUIMeta.CueType.String{S.GUI.CueType};
     Left = S.GUIMeta.LeftType.String{S.GUI.LeftType};
     Right = S.GUIMeta.RightType.String{S.GUI.RightType};
     response = S.GUIMeta.ResponseType.String{S.GUI.ResponseType};
+    % A pattern stimulus waits for the sniff onset (GetSniff) with Sniff Trigger ticked
+    patternStart = 'DeliverStim';
+    if S.GUI.SniffTrigger, patternStart = 'GetSniff'; end
 
     startAction = {'BNC1', 1, 'HiFi1', '*', 'RotaryEncoder1', ['#' 0], 'AnalogThreshEnable', 1};
     cueAction = {'RotaryEncoder1', '*Z'};
@@ -326,7 +327,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
         end
         responseAction = {};
     else
-        CueTime = S.GUI.CueTime;
+        CueTime = lhf.stimDuration(S.GUI, cue, 'cue');  % a pattern its design, an odour its sequence
         switch cue
             case 'Odour'
                 cueAction{end+1} = 'BNC2'; cueAction{end+1} = 1;
@@ -350,7 +351,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     case 'Pattern'
                         stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
                         stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 9;
-                        chooseState2 = 'GetSniff';
+                        chooseState2 = patternStart;
                         responseAction = {'PWM3', S.GUI.Intensity_cue};
                     case 'Light'
                         stimAction{end+1} = 'PWM1'; stimAction{end+1} = S.GUI.Intensity_Left;
@@ -378,7 +379,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     case 'Pattern'
                         stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
                         stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 10;
-                        chooseState2 = 'GetSniff';
+                        chooseState2 = patternStart;
                         responseAction = {'PWM3', S.GUI.Intensity_cue};
                     case 'Light'
                         stimAction{end+1} = 'PWM4'; stimAction{end+1} = S.GUI.Intensity_Right;
@@ -420,6 +421,21 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
         punishAction = {'BNC1', 1};
     end
 
+    % Laser power for this trial (with Laser control ticked): drawn from the
+    % design of the pattern it shows, set at SetLaserPower before the trial
+    laserTypes = {'Left', 'Right'};
+    laserKinds = {Left, Right};
+    laserType = laserTypes{currentTrialType};
+    laserDesign = [];
+    if strcmp(laserKinds{currentTrialType}, 'Pattern')
+        laserDesign = lhf.selectedDesign(laserType);
+    end
+    [irradiance, setpoint, laserAction] = lhf.laser.draw(laserDesign, laserType, S, luminose);
+
+    % Cue and stimulus last as long as their kind says (lhf.stimDuration):
+    % a pattern its design, an odour its sequence, light and sound their panel
+    stimTime = lhf.stimDuration(S.GUI, laserKinds{currentTrialType}, laserType);
+
     if currentTrial == 1
         sma = NewStateMachine();
         sma = AddState(sma, 'Name', 'Barcode1', ...
@@ -440,11 +456,15 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
             'OutputActions', {'BNC1', 0});
         sma = AddState(sma, 'Name', 'Barcode5', ...
             'Timer', normrnd(S.GUI.muBarcodeDur, S.GUI.sigmaBarcodeDur), ...
-            'StateChangeConditions', {'Tup', 'TrialStart'}, ...
+            'StateChangeConditions', {'Tup', 'SetLaserPower'}, ...
             'OutputActions', {'BNC1', 0});
     else
         sma = NewStateMachine();
     end
+    sma = AddState(sma, 'Name', 'SetLaserPower', ...
+        'Timer', 0, ...
+        'StateChangeConditions', {'Tup', 'TrialStart'}, ...
+        'OutputActions', laserAction);
     sma = AddState(sma, 'Name', 'TrialStart', ...
         'Timer', ITI(currentTrial)/2, ...
         'StateChangeConditions', {'Tup', 'ShowCue'}, ...
@@ -462,7 +482,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
         'StateChangeConditions', {'Flex1Trig1', 'DeliverStim'}, ...
         'OutputActions', { 'PWM3', S.GUI.Intensity_cue});
     sma = AddState(sma, 'Name', 'DeliverStim', ...
-        'Timer', S.GUI.StimTime, ...
+        'Timer', stimTime, ...
         'StateChangeConditions', {'Tup', 'GetResponse'}, ...
         'OutputActions', stimAction);
     sma = AddState(sma, 'Name', 'GetResponse', ...
@@ -494,6 +514,9 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     actions.Reward       = rewardAction;
     actions.Punishment   = punishAction;
     actions.RewardValveTime = valveTime;
+    actions.SetLaserPower = laserAction;
+    actions.LaserIrradiance_mWmm2 = irradiance;  % NaN when no power was set
+    actions.LaserSetpoint_mW      = setpoint;
 end
 
 function shouldStop = handle_pause_condition(H, R)
@@ -508,12 +531,26 @@ end
 
 function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
+    dmd_hf_2AFC('close');
+    lhf.laser.close();  % emission off, port freed (nothing to do with Laser control off)
     clear dmd_hf_2AFC;
     BpodSystem.Data.luminose = luminose;
+    BpodSystem.Data.GUIMeta = S.GUIMeta;
     BpodSystem.ProtocolSettings = S;
+    if ~isfield(BpodSystem.Data, 'StoppedReason')
+        BpodSystem.Data.StoppedReason = lhf.stopRecord('unknown', NaN);  % setup error or Ctrl+C
+    end
     SaveBpodSessionData;
     SaveBpodProtocolSettings;
+    lhf.report.write(BpodSystem.Data, lhf.protocolInfo('2AFC'), BpodSystem.Path.CurrentDataFile);
     diary off;
+    if BpodSystem.Status.BeingUsed == 1
+        RunProtocol('Stop');
+    end
+    % With BpodSystem listed in the base workspace, MATLAB's Workspace browser
+    % works through every change the session made to it once the prompt
+    % returns, and can run MATLAB out of memory (seen in LuminoseFM).
+    evalin('base', 'clear BpodSystem');
 end
 
 function restorePatternParams(typeNames, patternsFolder)
@@ -588,18 +625,25 @@ function restorePatternParams(typeNames, patternsFolder)
     end
 end
 
-function SaveOnlinePlots()
+function saveOnlinePlotsOnClose()
+    % Each plot is saved once, as its window closes (RunProtocol('Stop')
+    % closes them all), rather than rendered to disk after every trial.
     global BpodSystem
-    dataFile = BpodSystem.Path.CurrentDataFile;
-    savePath = fileparts(dataFile);
-    [~, sessionName] = fileparts(dataFile);
-    figNames = {'OutcomePlot', 'AccuracyPlot', 'RewardPlot', 'ResponsePlot', 'EncoderPlotFig'};
-    for i = 1:length(figNames)
-        try
-            fig = BpodSystem.ProtocolFigures.(figNames{i});
+    [savePath, sessionName] = fileparts(BpodSystem.Path.CurrentDataFile);
+    figNames = {'LivePlots'};
+    for i = 1:numel(figNames)
+        if isfield(BpodSystem.ProtocolFigures, figNames{i})
             fname = fullfile(savePath, [sessionName '_' figNames{i} '.png']);
-            saveas(fig, fname)
-        catch
+            set(BpodSystem.ProtocolFigures.(figNames{i}), 'CloseRequestFcn', @(fig, ~) saveAndClose(fig, fname));
         end
     end
+end
+
+function saveAndClose(fig, fname)
+    try
+        saveas(fig, fname);
+    catch
+        warning('Could not save %s', fname);
+    end
+    delete(fig);
 end

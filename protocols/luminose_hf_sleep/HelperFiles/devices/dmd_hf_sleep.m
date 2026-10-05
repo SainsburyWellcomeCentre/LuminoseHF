@@ -129,7 +129,7 @@ function seq = allocFrameStack(dmd, frameStack, illuTime_us)
     seq = dmd.device.allocSequence(1, nF);
     for k = 1:nF, seq.put(k-1, 1, frameStack(:,:,k)); end
     seq.setBinaryMode(true);
-    t = round(illuTime_us); seq.timing(t, t, 0, 0, 0); seq.setRepeat(1);
+    setFrameTiming(seq, illuTime_us); seq.setRepeat(1);
 end
 
 function design = loadDesign(BpodSystem, typeName, rowIdx, patternsFolder)

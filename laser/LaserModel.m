@@ -2,9 +2,17 @@ classdef LaserModel < handle
     % LaserModel  Serial control for Coherent OBIS laser via SCPI commands.
     %
     %   laser = LaserModel(luminose.laser)
+    %   laser = LaserModel(luminose.laser, mode)
     %
-    %   Connects to the OBIS remote on the configured COM port and sets
-    %   USB/CWP control mode. Call disconnect() when done.
+    %   Connects to the OBIS remote on the configured COM port and sets the
+    %   control mode. Call disconnect() when done.
+    %
+    %   mode  'cwp'     (default) internal CW power mode: emission follows
+    %                   setEnabled() alone.
+    %         'digital' external digital modulation: emission is gated by
+    %                   the TTL on the OBIS modulation input (DMD pin 8),
+    %                   at the power set by setPower(). Emission is
+    %                   enabled on connect.
 
     properties
         port        string
@@ -14,7 +22,10 @@ classdef LaserModel < handle
     end
 
     methods
-        function self = LaserModel(constants)
+        function self = LaserModel(constants, mode)
+            if nargin < 2 || isempty(mode)
+                mode = 'cwp';
+            end
             self.port        = constants.port;
             self.baudRate    = constants.baudRate;
             self.maxPower_mW = constants.maxPower_mW;
@@ -23,9 +34,21 @@ classdef LaserModel < handle
             configureTerminator(self.sp, "CR/LF");
             self.sp.Timeout = 5;
 
-            % Switch to USB (CWP) control mode
-            writeline(self.sp, "SOURce:AM:INTernal CWP");
-            pause(0.1);
+            switch lower(char(mode))
+                case 'cwp'
+                    % Switch to USB (CWP) control mode
+                    writeline(self.sp, "SOURce:AM:INTernal CWP");
+                    pause(0.1);
+                case 'digital'
+                    % External digital modulation: TTL gates emission
+                    writeline(self.sp, "SOURce:AM:EXTernal DIGital");
+                    pause(0.1);
+                    self.setEnabled(true);
+                    pause(0.1);
+                otherwise
+                    error('LaserModel:BadMode', ...
+                        'Unknown mode ''%s'' (expected ''cwp'' or ''digital'').', char(mode));
+            end
         end
 
         function setPower(self, mW)

@@ -5,10 +5,13 @@ function DrawTrialStructure(Params, Meta)
     cla(ax);
     hold(ax,'on');
 
-    cueTime = Params.CueTime;
+    % The longest row of each (lhf.stimDuration): a pattern its design, an
+    % odour its sequence, light and sound their panel's Duration
     cueType = Meta.CueType.String{Params.CueType};
-    stimTime = Params.StimTime;
-    stimType = strcat(Meta.LeftType.String{Params.LeftType}, '/', Meta.RightType.String{Params.RightType});
+    cueTime = lhf.stimDuration(Params, cueType, 'cue', 'longest');
+    leftType = Meta.LeftType.String{Params.LeftType}; rightType = Meta.RightType.String{Params.RightType};
+    stimTime = max(lhf.stimDuration(Params, leftType, 'Left', 'longest'), lhf.stimDuration(Params, rightType, 'Right', 'longest'));
+    stimType = strcat(leftType, '/', rightType);
     responseTime = Params.ResponseTime;
     errorDelay = Params.ErrorDelay;
     iti = Params.InterTrialInterval;

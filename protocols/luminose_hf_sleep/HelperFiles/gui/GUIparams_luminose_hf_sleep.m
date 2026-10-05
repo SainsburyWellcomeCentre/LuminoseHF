@@ -7,7 +7,7 @@ function GUIparams_luminose_hf_sleep()
     S.GUIPanels.TestPulses = {'TestPulses', 'TestPulsesType'};
     S.GUIPanels.TreatmentType = {'Ephys', 'EEG', 'Drug'};
     S.GUIPanels.ProtocolSettings = {'Sleep', 'muBarcodeDur', 'sigmaBarcodeDur'};
-    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffRising', 'CalibrateSniff'};
+    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'CalibrateSniff'};
 
     % == Trial Params ==
     S.GUI.maxTrials = 10000;  
@@ -120,9 +120,6 @@ function GUIparams_luminose_hf_sleep()
     S.GUIMeta.SniffOnsetThreshold.Label = 'Sniff Onset Thresh (V)';
     S.GUI.SniffOffsetThreshold = 1.5;
     S.GUIMeta.SniffOffsetThreshold.Label = 'Sniff Offset Thresh (V)';
-    S.GUI.SniffRising = false;
-    S.GUIMeta.SniffRising.Style = 'checkbox';
-    S.GUIMeta.SniffRising.Label = 'Rising Edge';
     S.GUI.CalibrateSniff = 0;
     S.GUIMeta.CalibrateSniff.Style = 'pushbutton';
     S.GUIMeta.CalibrateSniff.String = 'Calibrate Sniff (12s)';

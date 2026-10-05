@@ -44,21 +44,13 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     CAN_W = DMD_W / SCALE;   % 512
     CAN_H = DMD_H / SCALE;   % 384
 
-    if isstruct(S) && isfield(S, 'GUI') && isfield(S.GUI, 'dmdSpotSide')
-        spotSide = S.GUI.dmdSpotSide;
-    else
-        spotSide = luminose.dmd.spotSide;
-    end
-    r_px   = round((spotSide / luminose.dmd.projectedDMDlength) * DMD_W / 2);
-    r_px   = max(r_px, 1);
-    r_disp = max(floor(r_px / SCALE), 1);
-
-    % Grid parameters — 1px gap between cells guarantees strict non-overlap
-    gridCellSize = 2 * r_px + 2;
-    gridCols     = floor(DMD_W / gridCellSize);
-    gridRows     = floor(DMD_H / gridCellSize);
-    gridOffX     = floor((DMD_W - gridCols * gridCellSize) / 2);
-    gridOffY     = floor((DMD_H - gridRows * gridCellSize) / 2);
+    % Spot size: set here (Spot side box) and saved with the design as r_px.
+    % A design opens at its own size; a new one at the rig default
+    % (luminose.dmd.spotSide). applySpotSide sets r_px and the grid from it.
+    spotSide = luminose.dmd.spotSide;
+    r_px = 1; r_disp = 1;
+    gridCellSize = 4; gridCols = 1; gridRows = 1; gridOffX = 0; gridOffY = 0;
+    applySpotSide(spotSide);
 
     SPOT_COLORS = [ ...
         0.2  0.6  1.0; ...
@@ -83,6 +75,9 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     gridSelected = false(gridRows, gridCols);
     mode         = 'free';   % 'free' | 'grid'
     loadedTickMs = [];
+    % Laser power per pattern: shown only when the protocol declares
+    % S.GUIMeta.patternSel_<type>.LaserOptions (powercal's CS+ and CS-)
+    [laserOn, laser] = laserOptionsFor(S, patternType);
 
     % Load existing design — preloadFromType overrides to borrow another type's spots
     loadType = patternType;
@@ -100,8 +95,16 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         d            = BpodSystem.PluginObjects.PatternDesigns.(loadType){loadRow};
         spots        = d.spots;
         loadedTickMs = d.tickMs;
+        loadedMeta   = d;
     else
-        [spots, loadedTickMs] = tryLoadMetaForRow(luminose.dmd.patternsFolder, loadType, loadRow);
+        [spots, loadedTickMs, loadedMeta] = tryLoadMetaForRow(lhf.patternFolder(luminose.dmd, loadType), lhf.patternFileType(luminose.dmd, loadType), loadRow);
+    end
+    if laserOn && isfield(loadedMeta, 'laserIrradiances_mWmm2') && ~isempty(loadedMeta.laserIrradiances_mWmm2)
+        laser.irradiances = loadedMeta.laserIrradiances_mWmm2;
+        laser.weights = loadedMeta.laserWeights;
+    end
+    if ~isempty(spots) && isfield(loadedMeta, 'r_px')
+        applySpotSide(loadedMeta.r_px * 2 * luminose.dmd.projectedDMDlength / DMD_W);  % the design's own size
     end
     gridSelected = spotsToGrid(spots);
 
@@ -134,12 +137,48 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         'Position', [142 588 120 22], 'FontSize', 9, ...
         'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.5 0.5 0.5], ...
         'HorizontalAlignment', 'left');
-    uicontrol(fig, 'Style', 'text', ...
-        'String', sprintf('Spot half-width: %d px  (spotSide=%.2fmm)  — solid=Fixed, dashed=Random', ...
-            r_px, spotSide), ...
-        'Position', [15 564 CAN_W 22], 'FontSize', 9, ...
+    uicontrol(fig, 'Style', 'text', 'String', 'Spot side (mm)', ...
+        'Position', [15 562 100 22], 'FontSize', 10, ...
+        'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.75 0.75 0.75], ...
+        'HorizontalAlignment', 'left');
+    hSpotSide = uicontrol(fig, 'Style', 'edit', 'String', sprintf('%.3g', spotSide), ...
+        'Position', [118 562 55 24], 'FontSize', 11, ...
+        'BackgroundColor', [0.22 0.22 0.25], 'ForegroundColor', [1 1 1], ...
+        'Callback', @onSpotSide);
+    hSpotInfo = uicontrol(fig, 'Style', 'text', 'String', '', ...
+        'Position', [180 562 CAN_W-165 22], 'FontSize', 9, ...
         'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.5 0.5 0.5], ...
         'HorizontalAlignment', 'left');
+    updateSpotInfo();
+
+    % --- Laser power for this pattern (below the canvas) ---
+    hLaserIrr = [];
+    hLaserW = [];
+    if laserOn
+        uicontrol(fig, 'Style', 'text', 'String', 'LASER POWER (this pattern)', ...
+            'Position', [15 146 CAN_W 22], 'FontSize', 10, 'FontWeight', 'bold', ...
+            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.8 0.8 0.8], ...
+            'HorizontalAlignment', 'left');
+        uicontrol(fig, 'Style', 'text', 'String', 'Irradiance (mW/mm2)', ...
+            'Position', [15 114 150 22], 'FontSize', 10, ...
+            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.75 0.75 0.75], ...
+            'HorizontalAlignment', 'left');
+        hLaserIrr = uicontrol(fig, 'Style', 'edit', 'String', mat2str(laser.irradiances), ...
+            'Position', [170 114 300 24], 'FontSize', 11, ...
+            'BackgroundColor', [0.22 0.22 0.25], 'ForegroundColor', [1 1 1]);
+        uicontrol(fig, 'Style', 'text', 'String', 'Draw weights', ...
+            'Position', [15 82 150 22], 'FontSize', 10, ...
+            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.75 0.75 0.75], ...
+            'HorizontalAlignment', 'left');
+        hLaserW = uicontrol(fig, 'Style', 'edit', 'String', mat2str(laser.weights), ...
+            'Position', [170 82 300 24], 'FontSize', 11, ...
+            'BackgroundColor', [0.22 0.22 0.25], 'ForegroundColor', [1 1 1]);
+        uicontrol(fig, 'Style', 'text', ...
+            'String', 'Each trial showing this pattern draws one irradiance (weighted). Must be within the power calibration.', ...
+            'Position', [15 40 CAN_W 34], 'FontSize', 8, ...
+            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.5 0.5 0.5], ...
+            'HorizontalAlignment', 'left');
+    end
 
     % ---------------------------------------------------------------
     % Control panel (right column)
@@ -463,6 +502,23 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         updateDefaultTick();
     end
 
+    function onSpotSide(~, ~)
+        mm = str2double(get(hSpotSide, 'String'));
+        if isnan(mm) || mm <= 0
+            set(hSpotSide, 'String', sprintf('%.3g', spotSide));
+            return
+        end
+        applySpotSide(mm);
+        if strcmp(mode, 'grid')
+            gridSelected = spotsToGrid(spots);  % spots snap to the new grid's cells
+            syncSpotsFromGrid();
+            syncTableFromSpots();
+        end
+        updateSpotInfo();
+        refreshCanvas();
+        refreshTimeline();
+    end
+
     function onOverlayChange(~, ~)
         overlaySpots = loadOverlay();
         refreshCanvas();
@@ -517,6 +573,28 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         totalDur = max([spots.onset_ms] + [spots.dur_ms]);
         nF       = ceil(totalDur / tickMs);
 
+        laserIrradiances_mWmm2 = [];
+        laserWeights = [];
+        if laserOn
+            laserIrradiances_mWmm2 = str2num(get(hLaserIrr, 'String')); %#ok<ST2NM> accepts [2 5 8]
+            laserWeights = str2num(get(hLaserW, 'String')); %#ok<ST2NM>
+            if isempty(laserWeights), laserWeights = ones(size(laserIrradiances_mWmm2)); end
+            if isempty(laserIrradiances_mWmm2) || any(laserIrradiances_mWmm2 <= 0)
+                msgbox('Irradiance must be one or more positive values, e.g. [2 5 8].', 'Invalid laser power', 'warn');
+                return
+            end
+            if numel(laserWeights) ~= numel(laserIrradiances_mWmm2) || any(laserWeights < 0) || sum(laserWeights) == 0
+                msgbox('Give one non-negative draw weight per irradiance (not all zero).', 'Invalid weights', 'warn');
+                return
+            end
+            try
+                irradianceToSetpoint_mW(laserIrradiances_mWmm2, luminose);  % every value within the calibration
+            catch err
+                msgbox(err.message, 'Laser power out of calibration', 'warn');
+                return
+            end
+        end
+
         if ~isfield(BpodSystem, 'PluginObjects') || ~isstruct(BpodSystem.PluginObjects)
             BpodSystem.PluginObjects = struct();
         end
@@ -526,15 +604,25 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         if ~isfield(BpodSystem.PluginObjects.PatternDesigns, patternType)
             BpodSystem.PluginObjects.PatternDesigns.(patternType) = {};
         end
-        BpodSystem.PluginObjects.PatternDesigns.(patternType){rowIdx} = ...
-            struct('spots', spots, 'tickMs', tickMs, 'r_px', r_px, 'nF', nF);
+        design = struct('spots', spots, 'tickMs', tickMs, 'r_px', r_px, 'nF', nF);
+        if laserOn
+            design.laserIrradiances_mWmm2 = laserIrradiances_mWmm2;
+            design.laserWeights = laserWeights;
+        end
+        BpodSystem.PluginObjects.PatternDesigns.(patternType){rowIdx} = design;
 
-        patternsFolder = char(luminose.dmd.patternsFolder);
+        patternsFolder = lhf.patternFolder(luminose.dmd, patternType);
         if ~exist(patternsFolder, 'dir'), mkdir(patternsFolder); end
         timestamp = datestr(now, 'yyyymmdd_HHMMSS'); %#ok<TNOW1,DATST>
-        prefix    = sprintf('designed_%s_r%d_%s', patternType, rowIdx, timestamp);
+        fileType  = lhf.patternFileType(luminose.dmd, patternType);  % a protocol may save the type under its own name
+        prefix    = sprintf('designed_%s_r%d_%s', fileType, rowIdx, timestamp);
         metaFile  = fullfile(patternsFolder, sprintf('%s_meta.mat', prefix));
-        save(metaFile, 'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix');
+        if laserOn
+            save(metaFile, 'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix', ...
+                'laserIrradiances_mWmm2', 'laserWeights');
+        else
+            save(metaFile, 'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix');
+        end
 
         if isfield(BpodSystem.GUIHandles.ParameterGUI, 'PatternSelectorTables') && ...
            isfield(BpodSystem.GUIHandles.ParameterGUI.PatternSelectorTables, patternType)
@@ -572,6 +660,32 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     % ===================================================================
     % Internal helpers
     % ===================================================================
+
+    function applySpotSide(mm)
+        spotSide = mm;
+        r_px   = max(round((spotSide / luminose.dmd.projectedDMDlength) * DMD_W / 2), 1);
+        r_disp = max(floor(r_px / SCALE), 1);
+        % Grid parameters — 1px gap between cells guarantees strict non-overlap
+        gridCellSize = 2 * r_px + 2;
+        gridCols     = floor(DMD_W / gridCellSize);
+        gridRows     = floor(DMD_H / gridCellSize);
+        gridOffX     = floor((DMD_W - gridCols * gridCellSize) / 2);
+        gridOffY     = floor((DMD_H - gridRows * gridCellSize) / 2);
+    end
+
+    function updateSpotInfo()
+        overlapping = false;
+        for k = 1:numel(spots)
+            if anyOverlapWithExcluding(spots(k).x, spots(k).y, spots, k), overlapping = true; break; end
+        end
+        if overlapping
+            set(hSpotInfo, 'String', sprintf('half-width %d px — spots overlap at this size', r_px), ...
+                'ForegroundColor', [1 0.6 0.2]);
+        else
+            set(hSpotInfo, 'String', sprintf('half-width %d px — solid=Fixed, dashed=Random', r_px), ...
+                'ForegroundColor', [0.5 0.5 0.5]);
+        end
+    end
 
     function syncSpotsFromGrid()
         [rows, cols] = find(gridSelected);
@@ -642,7 +756,7 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
             ov = BpodSystem.PluginObjects.PatternDesigns.(sel){1}.spots;
             return;
         end
-        [ov, ~] = tryLoadMetaForRow(luminose.dmd.patternsFolder, sel, 1);
+        ov = tryLoadMetaForRow(lhf.patternFolder(luminose.dmd, sel), lhf.patternFileType(luminose.dmd, sel), 1);
     end
 
     function removeNearestSpot(xDsp, yDsp)
@@ -912,9 +1026,11 @@ end
 % =======================================================================
 % Meta-file loaders
 % =======================================================================
-function [spots, tickMs] = tryLoadMetaForRow(patternsFolder, patternType, rowIdx)
+function [spots, tickMs, meta] = tryLoadMetaForRow(patternsFolder, patternType, rowIdx)
+% meta: the design's r_px and laser options, where saved
     spots  = struct('x',{},'y',{},'onset_ms',{},'dur_ms',{},'isFixed',{});
     tickMs = [];
+    meta   = struct();
     patternsFolder = char(patternsFolder);
     metas = dir(fullfile(patternsFolder, sprintf('designed_%s_r%d_*_meta.mat', patternType, rowIdx)));
     if isempty(metas) && rowIdx == 1
@@ -932,8 +1048,27 @@ function [spots, tickMs] = tryLoadMetaForRow(patternsFolder, patternType, rowIdx
         end
         spots = m.spots;
         if isfield(m, 'tickMs'), tickMs = m.tickMs; end
+        if isfield(m, 'r_px'), meta.r_px = m.r_px; end
+        if isfield(m, 'laserIrradiances_mWmm2')
+            meta.laserIrradiances_mWmm2 = m.laserIrradiances_mWmm2;
+            meta.laserWeights = m.laserWeights;
+        end
     catch
     end
+end
+
+function [on, laser] = laserOptionsFor(S, patternType)
+% Whether the running protocol wants laser power set per pattern for this
+% type, and its defaults for a new design.
+    on = false;
+    laser = struct('irradiances', [], 'weights', []);
+    selector = ['patternSel_' patternType];
+    if ~(isstruct(S) && isfield(S, 'GUIMeta') && isfield(S.GUIMeta, selector)), return; end
+    meta = S.GUIMeta.(selector);
+    if ~(isfield(meta, 'LaserOptions') && meta.LaserOptions), return; end
+    on = true;
+    laser.irradiances = meta.LaserDefaults.irradiances;
+    laser.weights = meta.LaserDefaults.weights;
 end
 
 function [spots, tickMs] = tryLoadMeta(patternsFolder, patternType, imgIdx) %#ok<DEFNU>

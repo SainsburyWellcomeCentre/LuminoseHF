@@ -35,17 +35,15 @@ Behavioural protocols live under `protocols/` and keep the same general layout:
 - Main entry script: `protocol_name.m`
 - `HelperFiles/devices/`: soft code handlers and device wrappers
 - `HelperFiles/gui/`: parameter GUI definitions and sync logic
-- `HelperFiles/plots/`: live plotting during sessions
-- `HelperFiles/trials/`: trial selection, outcome logic, and data updates
+- Shared code (scoring, trial selection, live plots, odour delivery, settings loading, the session report) is in the `+lhf` package; see `docs/architecture.md`
 
 Active protocol areas include:
 
 - `protocols/luminose_hf_goNogo/`: main go/no-go task
-- `protocols/luminose_hf_playground/`: newer sandbox protocol for task setup, training modes, treatment metadata, and rig testing
 
 ### Shared GUI layer
 
-The top-level `gui/` folder now provides reusable GUI helpers used by the playground parameter interface:
+The top-level `gui/` folder now provides reusable GUI helpers used by the protocols' parameter interfaces:
 
 - `StartButtonPressed.m`: locks selected controls and flips the GUI into a running state
 - `DrawTrialStructure.m`: renders the current cue, stimulus, response, reward/error, and ITI timeline
@@ -56,7 +54,6 @@ The top-level `gui/` folder now provides reusable GUI helpers used by the playgr
 
 - `dmd/test_dmd.m` now serves as a simple pattern generation and BMP export check using the `dmd/testimages_*` output prefix.
 - `protocols/luminose_hf_goNogo/HelperFiles/gui/GUIparams_luminose_hf_goNogo.m` was updated to remove the error amplitude GUI field and to change the default CS+ and CS- odour valves.
-- `protocols/luminose_hf_playground/` initializes DMD and olfactometer models, optionally launches Bonsai, waits for an explicit GUI start press, and opens live outcome, accuracy, reward, response-time, and encoder plots.
 
 ## Development conventions
 

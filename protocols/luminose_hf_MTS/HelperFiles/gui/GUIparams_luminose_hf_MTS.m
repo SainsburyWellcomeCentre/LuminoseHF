@@ -2,12 +2,12 @@ function GUIparams_luminose_hf_MTS()
     global S
 
     %% ===== Trials =====
-    S.GUITabs.Trials = {'ProtocolSettings', 'Sniff', 'TreatmentType', 'TestPulses', 'TrainingParams'};
-    S.GUIPanels.TrainingParams = {'TrainingLevel', 'BiasCorrection', 'RepeatOnError', 'maxTrials', 'MatchProb'};
+    S.GUITabs.Trials = {'ProtocolSettings', 'Sniff', 'TreatmentType', 'TestPulses', 'TrainingParams', 'Laser'};
+    S.GUIPanels.TrainingParams = {'TrainingLevel', 'BiasCorrection', 'maxTrials', 'MatchProb'};
     S.GUIPanels.TestPulses = {'TestPulses', 'TestPulsesType'};
     S.GUIPanels.TreatmentType = {'Ephys', 'EEG', 'Drug'};
     S.GUIPanels.ProtocolSettings = {'Sleep', 'muBarcodeDur', 'sigmaBarcodeDur'};
-    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffRising', 'CalibrateSniff'};
+    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffTrigger', 'CalibrateSniff'};
 
     % == Training Params ==
     S.GUI.TrainingLevel = 1; % Default Training Level
@@ -17,9 +17,6 @@ function GUIparams_luminose_hf_MTS()
     S.GUI.BiasCorrection = true;
     S.GUIMeta.BiasCorrection.Style = 'checkbox';
     S.GUIMeta.BiasCorrection.Label = 'Bias Correction';
-    S.GUI.RepeatOnError = false;
-    S.GUIMeta.RepeatOnError.Style = 'checkbox';
-    S.GUIMeta.RepeatOnError.Label = 'Repeat on Error';
     S.GUI.maxTrials = 1000;
     S.GUIMeta.maxTrials.Label = 'Max Trials';
     S.GUI.MatchProb = 0.5;
@@ -60,9 +57,9 @@ function GUIparams_luminose_hf_MTS()
     S.GUIMeta.SniffOnsetThreshold.Label = 'Sniff Onset Thresh (V)';
     S.GUI.SniffOffsetThreshold = 2.0;  % fires when signal returns above this
     S.GUIMeta.SniffOffsetThreshold.Label = 'Sniff Offset Thresh (V)';
-    S.GUI.SniffRising = false;
-    S.GUIMeta.SniffRising.Style = 'checkbox';
-    S.GUIMeta.SniffRising.Label = 'Rising Edge';
+    S.GUI.SniffTrigger = true;  % a pattern stimulus starts at the sniff onset; unticked, right after the cue
+    S.GUIMeta.SniffTrigger.Style = 'checkbox';
+    S.GUIMeta.SniffTrigger.Label = 'Sniff Trigger';
     S.GUI.CalibrateSniff = 0;
     S.GUIMeta.CalibrateSniff.Style = 'pushbutton';
     S.GUIMeta.CalibrateSniff.String = 'Calibrate Sniff (12s)';
@@ -71,19 +68,27 @@ function GUIparams_luminose_hf_MTS()
 
     %% ===== Task =====
     S.GUITabs.Task = {'ITI', 'Response', 'Stimulus', 'DelayParams', 'CueParams'};
-    S.GUIPanels.CueParams = {'CueType', 'CueTime'};
-    S.GUIPanels.Stimulus = {'TemplateType', 'SampleType', 'StimTime'};
+    % Optional laser control: ticked, each trial showing a pattern sets the
+    % power drawn from that pattern's design (set in the Pattern Designer);
+    % unticked, the laser is not connected (lhf.laser.open)
+    S.GUIPanels.Laser = {'LaserControl'};
+    S.GUI.LaserControl = false;
+    S.GUIMeta.LaserControl.Style = 'checkbox';
+    S.GUIMeta.LaserControl.Label = 'Laser control';
+    S.GUIPanels.CueParams = {'CueType'};
+    S.GUIPanels.Stimulus = {'TemplateType', 'SampleType'};
     S.GUIPanels.DelayParams = {'Delay'};
     S.GUIPanels.Response = {'ResponseType', 'ResponseTime', 'RewardAmount', 'Punishment', ...
         'ErrorDelay', 'NoiseTime'};
     S.GUIPanels.ITI = {'VariableITI', 'InterTrialInterval', 'MaxITI'};
     % == CueParams ==
+    % How long the cue and stimuli last: a pattern its design, an odour its
+    % sequence (one olfactometer slot per odour), light and sound the
+    % Duration in their own panel (lhf.stimDuration)
     S.GUI.CueType = 1;
     S.GUIMeta.CueType.Style = 'popupmenu';
     S.GUIMeta.CueType.String = {'Light', 'Sound', 'Odour', 'Pattern'};
     S.GUIMeta.CueType.Label = 'Cue Type';
-    S.GUI.CueTime = 1;
-    S.GUIMeta.CueTime.Label = 'Cue Duration (s)';
 
     % == Stimulus ==
     S.GUI.TemplateType = 3;
@@ -94,8 +99,6 @@ function GUIparams_luminose_hf_MTS()
     S.GUIMeta.SampleType.Style = 'popupmenu';
     S.GUIMeta.SampleType.String = {'Light', 'Sound', 'Odour', 'Pattern'};
     S.GUIMeta.SampleType.Label = 'Sample Type';
-    S.GUI.StimTime = 1; % olfactometer: preSequence_delay + pulseTime + postSequence_delay
-    S.GUIMeta.StimTime.Label = 'Stim Duration (s)';
 
     % == Delay ==
     S.GUI.Delay = 2;
@@ -130,7 +133,7 @@ function GUIparams_luminose_hf_MTS()
     %% ===== Cue =====
     S.GUITabs.Cue = {'Light_cue', 'Sound_cue', 'Odour_cue', 'Pattern_cue'};
     S.GUIPanels.Light_cue = {'Intensity_cue'};
-    S.GUIPanels.Sound_cue = {'Freq_cue'};
+    S.GUIPanels.Sound_cue = {'Freq_cue', 'SoundDuration_cue'};
     S.GUIPanels.Odour_cue = {'valves_cue'};
     S.GUIPanels.Pattern_cue = {'patternSel_cue'};
     % == Light ==
@@ -139,6 +142,8 @@ function GUIparams_luminose_hf_MTS()
     % == Sound ==
     S.GUI.Freq_cue = 5000;
     S.GUIMeta.Freq_cue.Label = 'Frequency (Hz)';
+    S.GUI.SoundDuration_cue = 1;
+    S.GUIMeta.SoundDuration_cue.Label = 'Duration (s)';
     % == Odour ==
     S.GUI.valves_cue = [7];
     S.GUIMeta.valves_cue.Style = 'odour_selector';
@@ -168,18 +173,22 @@ function GUIparams_luminose_hf_MTS()
     % each trial; this is the existing odour_selector / pattern_selector
     % mechanism, unmodified.
     S.GUITabs.Template = {'Light_Template', 'Sound_Template', 'Odour_Template', 'Pattern_Template'};
-    S.GUIPanels.Light_Template = {'Intensity_Template'};
-    S.GUIPanels.Sound_Template = {'HighFreq_Template', 'LowFreq_Template'};
+    S.GUIPanels.Light_Template = {'Intensity_Template', 'LightDuration_Template'};
+    S.GUIPanels.Sound_Template = {'HighFreq_Template', 'LowFreq_Template', 'SoundDuration_Template'};
     S.GUIPanels.Odour_Template = {'valves_Template'};
     S.GUIPanels.Pattern_Template = {'patternSel_Template'};
     % == Light ==
     S.GUI.Intensity_Template = 100;
     S.GUIMeta.Intensity_Template.Label = 'Intensity (0-255)';
+    S.GUI.LightDuration_Template = 1;
+    S.GUIMeta.LightDuration_Template.Label = 'Duration (s)';
     % == Sound ==
     S.GUI.HighFreq_Template = 8;
     S.GUIMeta.HighFreq_Template.Label = 'High Freq (Hz)';
     S.GUI.LowFreq_Template = 4;
     S.GUIMeta.LowFreq_Template.Label = 'Low Freq (Hz)';
+    S.GUI.SoundDuration_Template = 1;
+    S.GUIMeta.SoundDuration_Template.Label = 'Duration (s)';
     % == Odour ==
     S.GUI.valves_Template = [3; 4; 7; 9; 10; 12; 13; 16];
     S.GUIMeta.valves_Template.Style = 'odour_selector';
@@ -195,6 +204,8 @@ function GUIparams_luminose_hf_MTS()
     S.GUIMeta.patternSel_Template.NFramesParam = 'patternNFrames_Template';
     S.GUIMeta.patternSel_Template.ExposureParam = 'patternExposure_Template';
     S.GUIMeta.patternSel_Template.TypeName = 'Template';
+    S.GUIMeta.patternSel_Template.LaserOptions = true;  % laser power per design, in the Pattern Designer
+    S.GUIMeta.patternSel_Template.LaserDefaults = struct('irradiances', [2 5 8 12 14.5], 'weights', [1 1 1 1 1]);
     S.GUIMeta.patternSel_Template.Label = '';
     S.GUI.patternProbs_Template = [1];
     S.GUIMeta.patternProbs_Template.Hidden = true;
@@ -208,18 +219,22 @@ function GUIparams_luminose_hf_MTS()
     % whichever template row was selected — the Sample tab's settings only
     % matter for Non-match trials.
     S.GUITabs.Sample = {'Light_Sample', 'Sound_Sample', 'Odour_Sample', 'Pattern_Sample'};
-    S.GUIPanels.Light_Sample = {'Intensity_Sample'};
-    S.GUIPanels.Sound_Sample = {'HighFreq_Sample', 'LowFreq_Sample'};
+    S.GUIPanels.Light_Sample = {'Intensity_Sample', 'LightDuration_Sample'};
+    S.GUIPanels.Sound_Sample = {'HighFreq_Sample', 'LowFreq_Sample', 'SoundDuration_Sample'};
     S.GUIPanels.Odour_Sample = {'valves_Sample'};
     S.GUIPanels.Pattern_Sample = {'patternSel_Sample'};
     % == Light ==
     S.GUI.Intensity_Sample = 100;
     S.GUIMeta.Intensity_Sample.Label = 'Intensity (0-255)';
+    S.GUI.LightDuration_Sample = 1;
+    S.GUIMeta.LightDuration_Sample.Label = 'Duration (s)';
     % == Sound ==
     S.GUI.HighFreq_Sample = 16;
     S.GUIMeta.HighFreq_Sample.Label = 'High Freq (Hz)';
     S.GUI.LowFreq_Sample = 12;
     S.GUIMeta.LowFreq_Sample.Label = 'Low Freq (Hz)';
+    S.GUI.SoundDuration_Sample = 1;
+    S.GUIMeta.SoundDuration_Sample.Label = 'Duration (s)';
     % == Odour ==
     % Each row is a candidate Non-match odour. Instead of its own
     % probability, each row carries one checkbox per current Template row
@@ -246,6 +261,8 @@ function GUIparams_luminose_hf_MTS()
     S.GUIMeta.patternSel_Sample.NFramesParam = 'patternNFrames_Sample';
     S.GUIMeta.patternSel_Sample.ExposureParam = 'patternExposure_Sample';
     S.GUIMeta.patternSel_Sample.TypeName = 'Sample';
+    S.GUIMeta.patternSel_Sample.LaserOptions = true;  % laser power per design, in the Pattern Designer
+    S.GUIMeta.patternSel_Sample.LaserDefaults = struct('irradiances', [2 5 8 12 14.5], 'weights', [1 1 1 1 1]);
     S.GUIMeta.patternSel_Sample.Label = '';
     S.GUI.patternProbs_Sample = [1];
     S.GUIMeta.patternProbs_Sample.Hidden = true;
@@ -270,7 +287,7 @@ function GUIparams_luminose_hf_MTS()
     S.GUIMeta.PPamplitude.Label = 'Amp (V)';
     S.GUI.Intensity_mask = 100;
     S.GUIMeta.Intensity_mask.Label = 'Intensity (0-255)';
-    S.GUI.Duration_mask = S.GUI.StimTime;
+    S.GUI.Duration_mask = 1;
     S.GUIMeta.Duration_mask.Label = 'Duration (s)';
     % == Pattern ==
     S.GUI.patternSel_opto = 0;

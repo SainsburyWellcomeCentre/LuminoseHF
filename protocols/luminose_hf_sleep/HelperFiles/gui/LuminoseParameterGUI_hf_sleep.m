@@ -140,7 +140,7 @@ function varargout = LuminoseParameterGUI_hf_sleep(varargin)
                     ThisPanelParamNames = ThisPanelParamNames(end:-1:1);
                     nParams = length(ThisPanelParamNames);
                     paramHeight = 35;      
-                    panelPadding = 28;      
+                    panelPadding = 45;  % room for the panel title above the top row
                     ThisPanelHeight = nParams * paramHeight + panelPadding;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(ThisTabPanelNames{p}) = uipanel(htab,...
                         'title',sprintf('  %s  ',ThisTabPanelNames{p}),'FontSize',12,'FontWeight','Bold',...
@@ -320,12 +320,12 @@ function varargout = LuminoseParameterGUI_hf_sleep(varargin)
                     VPos = VPos + ThisPanelHeight + 15;
                 end
                 if strcmpi(TabNames{t}, 'OptoStim')
-                    panelName = 'OptoStimPreview'; panelHeight = 120;
+                    panelName = 'OptoStimPreview'; panelHeight = 135;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName) = uipanel(htab, 'title', '  OptoStim Preview  ', ...
                         'FontSize', 12, 'FontWeight', 'Bold', 'ForegroundColor', tabColor, 'BackgroundColor', COLORS.panelBg, ...
                         'Units', 'Pixels', 'Position', [15 VPos 455 panelHeight], 'BorderType', 'line', 'HighlightColor', tabColor, 'BorderWidth', 2);
                     BpodSystem.GUIHandles.ParameterGUI.OptoStimAxes = axes('Parent', BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName), ...
-                        'Units', 'normalized', 'Position', [0.08 0.2 0.9 0.65], 'Box', 'on', 'Color', COLORS.panelBg);
+                        'Units', 'normalized', 'Position', [0.08 0.18 0.9 0.6], 'Box', 'on', 'Color', COLORS.panelBg);
                     hold(BpodSystem.GUIHandles.ParameterGUI.OptoStimAxes, 'on');
                     DrawOptoStim(Params);
                     VPos = VPos + panelHeight + 15;

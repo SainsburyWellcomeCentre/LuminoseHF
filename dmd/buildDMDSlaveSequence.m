@@ -38,7 +38,7 @@ function seq = buildDMDSlaveSequence(dmd, patternsFolder, imgIdx, illuminateTime
         seq.put(0, 1, img);
         seq.setBinaryMode(true);
         illuTime = round(illuminateTime_us);
-        seq.timing(illuTime, illuTime, 0, 0, 0);
+        setFrameTiming(seq, illuTime);
         seq.setRepeat(1);
     else
         % Multi-frame: load nFrames consecutive BMPs starting at imgIdx
@@ -59,7 +59,7 @@ function seq = buildDMDSlaveSequence(dmd, patternsFolder, imgIdx, illuminateTime
         end
         seq.setBinaryMode(true);
         illuTime = round(illuminateTime_us);
-        seq.timing(illuTime, illuTime, 0, 0, 0);  % uniform per-frame duration
+        setFrameTiming(seq, illuTime);  % uniform per-frame duration
         seq.setRepeat(1);
     end
 end

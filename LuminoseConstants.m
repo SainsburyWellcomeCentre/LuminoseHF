@@ -5,7 +5,8 @@ classdef LuminoseConstants < handle
     %   obj = LuminoseConstants(configFile)
     %
     %   Constructor loads configuration from a YAML file. If configFile is not
-    %   provided, looks for 'luminose_config.yaml' in the current directory.
+    %   provided, uses 'luminose_config.yaml' beside this file (the repo root),
+    %   so the repo works from wherever it is cloned.
     %   All configuration parameters must be specified in the YAML file.
     %
     %   Use `help LuminoseConstants` or `doc LuminoseConstants` to view this
@@ -24,19 +25,25 @@ classdef LuminoseConstants < handle
         configFile string
     end
 
+    methods (Static)
+        function file = defaultConfigFile()
+            % defaultConfigFile  luminose_config.yaml in the folder holding this class
+            file = string(fullfile(fileparts(mfilename('fullpath')), 'luminose_config.yaml'));
+        end
+    end
+
     methods
         function obj = LuminoseConstants(configFile)
             % LuminoseConstants  Construct the constants object.
             %
             %   obj = LuminoseConstants()
-            %       Load from 'luminose_config.yaml' in current directory
+            %       Load from 'luminose_config.yaml' in the repo root
             %
             %   obj = LuminoseConstants(configFile)
             %       Load from specified YAML config file
 
-            % Default config file location
             if nargin < 1
-                configFile = "C:\Users\harrislab\luminose_hf\luminose_config.yaml";
+                configFile = LuminoseConstants.defaultConfigFile();
             else
                 configFile = string(configFile);
             end
@@ -378,8 +385,12 @@ classdef LuminoseConstants < handle
             obj.laser = struct( ...
                 'port',        string(cfg.port), ...
                 'baudRate',    cfg.baudRate, ...
-                'maxPower_mW', cfg.maxPower_mW ...
+                'maxPower_mW', cfg.maxPower_mW, ...
+                'spotGain',    1 ...
             );
+            if isfield(cfg, 'spotGain')  % measured spot vs full-field irradiance
+                obj.laser.spotGain = cfg.spotGain;
+            end
         end
 
         function loadCameraConfig(obj, config)

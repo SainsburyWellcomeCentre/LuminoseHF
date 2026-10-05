@@ -5193,3 +5193,8 @@
 [23:45:48] using cached sequence for Left row 1
 [23:45:48] displaying Left row 1 in MASTER mode (immediate)
 [23:45:48] DMD blanked
+[16:50:04] DMD halted
+[18:05:14] DMD halted
+[19:05:12] DMD halted
+[19:12:41] DMD halted
+[19:13:22] DMD halted

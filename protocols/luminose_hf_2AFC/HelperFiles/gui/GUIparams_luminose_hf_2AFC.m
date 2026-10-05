@@ -2,12 +2,12 @@ function GUIparams_luminose_hf_2AFC()
     global S
     
     %% ===== Trials =====
-    S.GUITabs.Trials = {'ProtocolSettings', 'Sniff', 'TreatmentType', 'TestPulses', 'TrainingParams'};
-    S.GUIPanels.TrainingParams = {'TrainingLevel', 'BiasCorrection', 'RepeatOnError', 'maxTrials', 'Leftprob'};
+    S.GUITabs.Trials = {'ProtocolSettings', 'Sniff', 'TreatmentType', 'TestPulses', 'TrainingParams', 'Laser'};
+    S.GUIPanels.TrainingParams = {'TrainingLevel', 'BiasCorrection', 'maxTrials', 'Leftprob'};
     S.GUIPanels.TestPulses = {'TestPulses', 'TestPulsesType'};
     S.GUIPanels.TreatmentType = {'Ephys', 'EEG', 'Drug'};
     S.GUIPanels.ProtocolSettings = {'Sleep', 'muBarcodeDur', 'sigmaBarcodeDur'};
-    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffRising', 'CalibrateSniff'};
+    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffTrigger', 'CalibrateSniff'};
 
     % == Training Params ==
     S.GUI.TrainingLevel = 1; % Default Training Level
@@ -17,9 +17,6 @@ function GUIparams_luminose_hf_2AFC()
     S.GUI.BiasCorrection = true;
     S.GUIMeta.BiasCorrection.Style = 'checkbox';
     S.GUIMeta.BiasCorrection.Label = 'Bias Correction';
-    S.GUI.RepeatOnError = false;
-    S.GUIMeta.RepeatOnError.Style = 'checkbox';
-    S.GUIMeta.RepeatOnError.Label = 'Repeat on Error';
     S.GUI.maxTrials = 1000;
     S.GUIMeta.maxTrials.Label = 'Max Trials';
     S.GUI.Leftprob = 0.5;
@@ -60,9 +57,9 @@ function GUIparams_luminose_hf_2AFC()
     S.GUIMeta.SniffOnsetThreshold.Label = 'Sniff Onset Thresh (V)';
     S.GUI.SniffOffsetThreshold = 2.0;  % fires when signal returns above this
     S.GUIMeta.SniffOffsetThreshold.Label = 'Sniff Offset Thresh (V)';
-    S.GUI.SniffRising = false;
-    S.GUIMeta.SniffRising.Style = 'checkbox';
-    S.GUIMeta.SniffRising.Label = 'Rising Edge';
+    S.GUI.SniffTrigger = true;  % a pattern stimulus starts at the sniff onset; unticked, right after the cue
+    S.GUIMeta.SniffTrigger.Style = 'checkbox';
+    S.GUIMeta.SniffTrigger.Label = 'Sniff Trigger';
     S.GUI.CalibrateSniff = 0;
     S.GUIMeta.CalibrateSniff.Style = 'pushbutton';
     S.GUIMeta.CalibrateSniff.String = 'Calibrate Sniff (12s)';
@@ -71,18 +68,26 @@ function GUIparams_luminose_hf_2AFC()
 
     %% ===== Task =====
     S.GUITabs.Task = {'ITI', 'Response', 'Stimulus', 'CueParams'};
-    S.GUIPanels.CueParams = {'CueType', 'CueTime'};
-    S.GUIPanels.Stimulus = {'LeftType', 'RightType', 'StimTime'};
+    % Optional laser control: ticked, each trial showing a pattern sets the
+    % power drawn from that pattern's design (set in the Pattern Designer);
+    % unticked, the laser is not connected (lhf.laser.open)
+    S.GUIPanels.Laser = {'LaserControl'};
+    S.GUI.LaserControl = false;
+    S.GUIMeta.LaserControl.Style = 'checkbox';
+    S.GUIMeta.LaserControl.Label = 'Laser control';
+    S.GUIPanels.CueParams = {'CueType'};
+    S.GUIPanels.Stimulus = {'LeftType', 'RightType'};
     S.GUIPanels.Response = {'ResponseType', 'ResponseTime', 'RewardAmount', 'Punishment', ...
         'ErrorDelay', 'NoiseTime'};
     S.GUIPanels.ITI = {'VariableITI', 'InterTrialInterval', 'MaxITI'};
     % == CueParams ==
+    % How long the cue and stimuli last: a pattern its design, an odour its
+    % sequence (one olfactometer slot per odour), light and sound the
+    % Duration in their own panel (lhf.stimDuration)
     S.GUI.CueType = 1;
     S.GUIMeta.CueType.Style = 'popupmenu';
     S.GUIMeta.CueType.String = {'Light', 'Sound', 'Odour', 'Pattern'};
     S.GUIMeta.CueType.Label = 'Cue Type';
-    S.GUI.CueTime = 1;
-    S.GUIMeta.CueTime.Label = 'Cue Duration (s)';
     
     % == Stimulus ==
     S.GUI.LeftType = 3;
@@ -93,8 +98,6 @@ function GUIparams_luminose_hf_2AFC()
     S.GUIMeta.RightType.Style = 'popupmenu';
     S.GUIMeta.RightType.String = {'Light', 'Sound', 'Odour', 'Pattern'};
     S.GUIMeta.RightType.Label = 'Right Type';
-    S.GUI.StimTime = 1; % olfactometer: preSequence_delay + pulseTime + postSequence_delay
-    S.GUIMeta.StimTime.Label = 'Stim Duration (s)';
     
     % == Response ==
     S.GUI.ResponseType = 1;
@@ -124,16 +127,20 @@ function GUIparams_luminose_hf_2AFC()
 
     %% ===== Cue =====
     S.GUITabs.Cue = {'Light_cue', 'Sound_cue', 'Odour_cue', 'Pattern_cue'};
-    S.GUIPanels.Light_cue = {'Intensity_cue'};
-    S.GUIPanels.Sound_cue = {'Freq_cue'};
+    S.GUIPanels.Light_cue = {'Intensity_cue', 'LightDuration_cue'};
+    S.GUIPanels.Sound_cue = {'Freq_cue', 'SoundDuration_cue'};
     S.GUIPanels.Odour_cue = {'valves_cue'};
     S.GUIPanels.Pattern_cue = {'patternSel_cue'};
     % == Light ==
     S.GUI.Intensity_cue = 100;
     S.GUIMeta.Intensity_cue.Label = 'Intensity (0-255)';
+    S.GUI.LightDuration_cue = 1;
+    S.GUIMeta.LightDuration_cue.Label = 'Duration (s)';
     % == Sound ==
     S.GUI.Freq_cue = 5000;
     S.GUIMeta.Freq_cue.Label = 'Frequency (Hz)';
+    S.GUI.SoundDuration_cue = 1;
+    S.GUIMeta.SoundDuration_cue.Label = 'Duration (s)';
     % == Odour ==
     S.GUI.valves_cue = [7];
     S.GUIMeta.valves_cue.Style = 'odour_selector';
@@ -159,18 +166,22 @@ function GUIparams_luminose_hf_2AFC()
 
     %% ===== Left =====
     S.GUITabs.Left = {'Light_Left', 'Sound_Left', 'Odour_Left', 'Pattern_Left'};
-    S.GUIPanels.Light_Left = {'Intensity_Left'};
-    S.GUIPanels.Sound_Left = {'HighFreq_Left', 'LowFreq_Left'};
+    S.GUIPanels.Light_Left = {'Intensity_Left', 'LightDuration_Left'};
+    S.GUIPanels.Sound_Left = {'HighFreq_Left', 'LowFreq_Left', 'SoundDuration_Left'};
     S.GUIPanels.Odour_Left = {'valves_Left'};
     S.GUIPanels.Pattern_Left = {'patternSel_Left'};
     % == Light ==
     S.GUI.Intensity_Left = 100;
     S.GUIMeta.Intensity_Left.Label = 'Intensity (0-255)';
+    S.GUI.LightDuration_Left = 1;
+    S.GUIMeta.LightDuration_Left.Label = 'Duration (s)';
     % == Sound ==
     S.GUI.HighFreq_Left = 8;
     S.GUIMeta.HighFreq_Left.Label = 'High Freq (Hz)';
     S.GUI.LowFreq_Left = 4;
     S.GUIMeta.LowFreq_Left.Label = 'Low Freq (Hz)';
+    S.GUI.SoundDuration_Left = 1;
+    S.GUIMeta.SoundDuration_Left.Label = 'Duration (s)';
     % == Odour ==
     S.GUI.valves_Left = [12];
     S.GUIMeta.valves_Left.Style = 'odour_selector';
@@ -186,6 +197,8 @@ function GUIparams_luminose_hf_2AFC()
     S.GUIMeta.patternSel_Left.NFramesParam = 'patternNFrames_Left';
     S.GUIMeta.patternSel_Left.ExposureParam = 'patternExposure_Left';
     S.GUIMeta.patternSel_Left.TypeName = 'Left';
+    S.GUIMeta.patternSel_Left.LaserOptions = true;  % laser power per design, in the Pattern Designer
+    S.GUIMeta.patternSel_Left.LaserDefaults = struct('irradiances', [2 5 8 12 14.5], 'weights', [1 1 1 1 1]);
     S.GUIMeta.patternSel_Left.Label = '';
     S.GUI.patternProbs_Left = [1];
     S.GUIMeta.patternProbs_Left.Hidden = true;
@@ -196,18 +209,22 @@ function GUIparams_luminose_hf_2AFC()
 
     %% ===== Right =====
     S.GUITabs.Right = {'Light_Right', 'Sound_Right', 'Odour_Right', 'Pattern_Right'};
-    S.GUIPanels.Light_Right = {'Intensity_Right'};
-    S.GUIPanels.Sound_Right = {'HighFreq_Right', 'LowFreq_Right'};
+    S.GUIPanels.Light_Right = {'Intensity_Right', 'LightDuration_Right'};
+    S.GUIPanels.Sound_Right = {'HighFreq_Right', 'LowFreq_Right', 'SoundDuration_Right'};
     S.GUIPanels.Odour_Right = {'valves_Right'};
     S.GUIPanels.Pattern_Right = {'patternSel_Right'};
     % == Light ==
     S.GUI.Intensity_Right = 100;
     S.GUIMeta.Intensity_Right.Label = 'Intensity (0-255)';
+    S.GUI.LightDuration_Right = 1;
+    S.GUIMeta.LightDuration_Right.Label = 'Duration (s)';
     % == Sound ==
     S.GUI.HighFreq_Right = 16;
     S.GUIMeta.HighFreq_Right.Label = 'High Freq (Hz)';
     S.GUI.LowFreq_Right = 12;
     S.GUIMeta.LowFreq_Right.Label = 'Low Freq (Hz)';
+    S.GUI.SoundDuration_Right = 1;
+    S.GUIMeta.SoundDuration_Right.Label = 'Duration (s)';
     % == Odour ==
     S.GUI.valves_Right = [16];
     S.GUIMeta.valves_Right.Style = 'odour_selector';
@@ -223,6 +240,8 @@ function GUIparams_luminose_hf_2AFC()
     S.GUIMeta.patternSel_Right.NFramesParam = 'patternNFrames_Right';
     S.GUIMeta.patternSel_Right.ExposureParam = 'patternExposure_Right';
     S.GUIMeta.patternSel_Right.TypeName = 'Right';
+    S.GUIMeta.patternSel_Right.LaserOptions = true;  % laser power per design, in the Pattern Designer
+    S.GUIMeta.patternSel_Right.LaserDefaults = struct('irradiances', [2 5 8 12 14.5], 'weights', [1 1 1 1 1]);
     S.GUIMeta.patternSel_Right.Label = '';
     S.GUI.patternProbs_Right = [1];
     S.GUIMeta.patternProbs_Right.Hidden = true;
@@ -247,7 +266,7 @@ function GUIparams_luminose_hf_2AFC()
     S.GUIMeta.PPamplitude.Label = 'Amp (V)';
     S.GUI.Intensity_mask = 100;
     S.GUIMeta.Intensity_mask.Label = 'Intensity (0-255)';
-    S.GUI.Duration_mask = S.GUI.StimTime;
+    S.GUI.Duration_mask = 1;
     S.GUIMeta.Duration_mask.Label = 'Duration (s)';
     % == Pattern ==
     S.GUI.patternSel_opto = 0;

@@ -74,6 +74,12 @@ laser:
   port: "COM15"
   baudRate: 115200
   maxPower_mW: 165
+  # Spot irradiance / full-field calibration irradiance (dmd/power_calibration.csv),
+  # measured 2026-10-01: a 57x57-mirror spot near the DMD centre (powercal's CS-)
+  # read 0.516 mW at a 165 mW setpoint = 34.26 mW/mm^2 over 0.01506 mm^2, against
+  # 14.59 mW/mm^2 full-field. irradianceToSetpoint_mW multiplies the calibration
+  # by it, so irradiances everywhere mean irradiance in that spot. 1 = full field.
+  spotGain: 2.348
 
 # Hamamatsu ORCA-Flash4.0 LT3 camera configuration
 camera:

@@ -12,11 +12,7 @@ function RunSniffCalibration(~)
     %% Read current GUI state
     latestParams = BpodSystem.GUIData.ParameterGUI.LatestGUIParams;
 
-    if isfield(latestParams, 'SniffRising')
-        risingEdge = logical(latestParams.SniffRising);
-    else
-        risingEdge = false;
-    end
+    risingEdge = false;  % an inhalation drops the signal (SniffDetector)
 
     %% Run calibration
     try

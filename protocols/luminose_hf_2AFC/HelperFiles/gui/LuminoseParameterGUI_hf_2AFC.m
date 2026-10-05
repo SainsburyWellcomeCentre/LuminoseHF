@@ -155,7 +155,7 @@ function varargout = LuminoseParameterGUI_hf_2AFC(varargin)
                     ThisPanelParamNames = ThisPanelParamNames(end:-1:1);
                     nParams = length(ThisPanelParamNames);
                     paramHeight = 35;      
-                    panelPadding = 28;      
+                    panelPadding = 45;  % room for the panel title above the top row
                     ThisPanelHeight = nParams * paramHeight + panelPadding;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(ThisTabPanelNames{p}) = uipanel(htab,...
                         'title',sprintf('  %s  ',ThisTabPanelNames{p}),'FontSize',12,'FontWeight','Bold',...
@@ -447,18 +447,18 @@ function varargout = LuminoseParameterGUI_hf_2AFC(varargin)
                     VPos = VPos + ThisPanelHeight + 15;
                 end
                 if contains(lower(TabNames{t}),'task')
-                    panelName = 'TrialStructure'; ThisPanelHeight = 90;
+                    panelName = 'TrialStructure'; ThisPanelHeight = 105;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName) = uipanel(htab,...
                         'title',sprintf('  %s  ',panelName),'FontSize',12,'FontWeight','Bold','ForegroundColor',tabColor,...
                         'BackgroundColor',COLORS.panelBg,'Units','Pixels','Position',[HPos VPos 455 ThisPanelHeight],...
                         'BorderType','line','HighlightColor',tabColor,'BorderWidth',2,'BorderColor',tabColor);
                     BpodSystem.GUIHandles.ParameterGUI.TrialStructureAxes = axes('Parent',BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName),...
-                        'Units','normalized','Position',[0.08 0.15 0.9 0.7],'Box','on','Color',COLORS.panelBg);
+                        'Units','normalized','Position',[0.08 0.12 0.9 0.62],'Box','on','Color',COLORS.panelBg);
                     DrawTrialStructure(Params, Meta);
                     VPos = VPos + ThisPanelHeight + 15;
                 end
                 if any(contains(lower(TabNames{t}), {'cue','left','right'}))
-                    panelName = sprintf('%s_StimulusIndicators', TabNames{t}); ThisPanelHeight = 70;
+                    panelName = sprintf('%s_StimulusIndicators', TabNames{t}); ThisPanelHeight = 80;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName) = uipanel(htab,...
                         'title',' Stimulus Type ','FontSize',11,'FontWeight','Bold','ForegroundColor',tabColor,...
                         'BackgroundColor',COLORS.panelBg,'Units','Pixels','Position',[15 VPos 455 ThisPanelHeight],...
@@ -482,12 +482,12 @@ function varargout = LuminoseParameterGUI_hf_2AFC(varargin)
                     end
                 end
                 if strcmpi(TabNames{t}, 'OptoStim')
-                    panelName = 'OptoStimPreview'; panelHeight = 120;
+                    panelName = 'OptoStimPreview'; panelHeight = 135;
                     BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName) = uipanel(htab, 'title', '  OptoStim Preview  ', ...
                         'FontSize', 12, 'FontWeight', 'Bold', 'ForegroundColor', tabColor, 'BackgroundColor', COLORS.panelBg, ...
                         'Units', 'Pixels', 'Position', [15 VPos 455 panelHeight], 'BorderType', 'line', 'HighlightColor', tabColor, 'BorderWidth', 2);
                     BpodSystem.GUIHandles.ParameterGUI.OptoStimAxes = axes('Parent', BpodSystem.GUIHandles.ParameterGUI.Panels.(panelName), ...
-                        'Units', 'normalized', 'Position', [0.08 0.2 0.9 0.65], 'Box', 'on', 'Color', COLORS.panelBg);
+                        'Units', 'normalized', 'Position', [0.08 0.18 0.9 0.6], 'Box', 'on', 'Color', COLORS.panelBg);
                     hold(BpodSystem.GUIHandles.ParameterGUI.OptoStimAxes, 'on');
                     DrawOptoStim(Params);
                     VPos = VPos + panelHeight + 15;
@@ -563,34 +563,6 @@ function varargout = LuminoseParameterGUI_hf_2AFC(varargin)
                 end
                 if ~isequal(ThisParamStyle, 5), BpodSystem.GUIData.ParameterGUI.LastParamValues{p} = Params.GUI.(ThisParamName); end
             end
-            % Update StimTime based on odour selection (number of rows in matrix)
-            if isfield(Params, 'GUIMeta')
-                Meta = Params.GUIMeta;
-            elseif isfield(BpodSystem.GUIData.ParameterGUI, 'LatestMeta')
-                Meta = BpodSystem.GUIData.ParameterGUI.LatestMeta;
-            else
-                Meta = struct;
-            end
-            currentLeftType = Meta.LeftType.String{Params.GUI.LeftType};
-            currentRightType = Meta.RightType.String{Params.GUI.RightType};
-            if strcmp(currentLeftType, 'Odour') || strcmp(currentRightType, 'Odour')
-                nRows = 1;
-                odourParams = {'valves_cue', 'valves_Left', 'valves_Right'};
-                for iO = 1:numel(odourParams)
-                    if isfield(Params.GUI, odourParams{iO})
-                        nRows = max(nRows, size(Params.GUI.(odourParams{iO}), 1));
-                    end
-                end
-                Params.GUI.StimTime = nRows * (0.001 + 1 + 0.001);
-                if isfield(BpodSystem.GUIData.ParameterGUI, 'ParamIndexByName') && ...
-                   isfield(BpodSystem.GUIData.ParameterGUI.ParamIndexByName, 'StimTime')
-                    stimIdx = BpodSystem.GUIData.ParameterGUI.ParamIndexByName.StimTime;
-                    hStim = BpodSystem.GUIHandles.ParameterGUI.Params(stimIdx);
-                    if ishandle(hStim), set(hStim, 'String', num2str(Params.GUI.StimTime)); end
-                    BpodSystem.GUIData.ParameterGUI.LastParamValues{stimIdx} = Params.GUI.StimTime;
-                end
-            end
-
             BpodSystem.GUIData.ParameterGUI.LatestGUIParams = Params.GUI;
             BpodSystem.GUIData.ParameterGUI.LatestMeta = Params.GUIMeta;
             UpdateRelevantPanels(Params.GUI, Params.GUIMeta);
@@ -905,10 +877,20 @@ end
 function DrawTrialStructure(Params, Meta)
     global BpodSystem
     ax = BpodSystem.GUIHandles.ParameterGUI.TrialStructureAxes;
+    % Redrawn only when a setting changed: a pattern's duration may load its
+    % design file (lhf.stimDuration), and sync runs every trial
+    key = {rmfield(Params, intersect(fieldnames(Params), {'delivered_odours', 'delivered_dutyCycles'})), Meta};
+    if isequal(ax.UserData, key), return; end
     cla(ax); hold(ax,'on');
+    ax.UserData = key;
 
-    cueTime = Params.CueTime; cueType = Meta.CueType.String{Params.CueType};
-    stimTime = Params.StimTime; stimType = strcat(Meta.LeftType.String{Params.LeftType}, '/', Meta.RightType.String{Params.RightType});
+    % The longest row of each (lhf.stimDuration): a pattern its design, an
+    % odour its sequence, light and sound their panel's Duration
+    cueType = Meta.CueType.String{Params.CueType};
+    cueTime = lhf.stimDuration(Params, cueType, 'cue', 'longest');
+    type1 = Meta.LeftType.String{Params.LeftType}; type2 = Meta.RightType.String{Params.RightType};
+    stimTime = max(lhf.stimDuration(Params, type1, 'Left', 'longest'), lhf.stimDuration(Params, type2, 'Right', 'longest'));
+    stimType = strcat(type1, '/', type2);
     responseTime = Params.ResponseTime; errorDelay = Params.ErrorDelay; iti = Params.InterTrialInterval;
     itiType = 'Fixed'; if Params.VariableITI, itiType = 'Variable'; end
 
@@ -920,11 +902,12 @@ function DrawTrialStructure(Params, Meta)
     for i = 1:length(blocks)
         rectangle(ax,'Position',[t ypos blockTimes(i) height], 'FaceColor', colors(i,:), 'EdgeColor','k');
         text(t + blockTimes(i)/2, ypos+height*1.4, blocks{i}, 'HorizontalAlignment','center','Parent',ax);
-        text(t + blockTimes(i)/2, ypos+height/2, string(blockTimes(i))+'s', 'HorizontalAlignment','center','Parent',ax);
+        text(t + blockTimes(i)/2, ypos+height/2, string(round(blockTimes(i), 3))+'s', 'HorizontalAlignment','center','Parent',ax);
         text(t + blockTimes(i)/2, ypos-height*0.6, blockNames{i}, 'HorizontalAlignment','center', 'Rotation', 25,'Parent',ax);
         t = t + blockTimes(i);
     end
     ax.XLim = [0 t]; ax.YLim = [0 1]; axis(ax,'off');
+    BpodSystem.GUIData.ParameterGUI.TrialDuration = t;  % the OptoStim preview's trial
 end
 
 function DrawOptoStim(Params)
@@ -932,7 +915,8 @@ function DrawOptoStim(Params)
     ax = BpodSystem.GUIHandles.ParameterGUI.OptoStimAxes;
     cla(ax); hold(ax,'on');
     widthScale = 0.5; ypos = 0.3; height = 0.4;
-    totalTrial = Params.CueTime + Params.StimTime + Params.ResponseTime + Params.ErrorDelay + Params.InterTrialInterval;
+    totalTrial = 10;
+    if isfield(BpodSystem.GUIData.ParameterGUI, 'TrialDuration'), totalTrial = BpodSystem.GUIData.ParameterGUI.TrialDuration; end
     scaledTotal = totalTrial * widthScale;
     rectangle(ax, 'Position', [0 ypos scaledTotal height], 'FaceColor', [0.85 0.85 0.85], 'EdgeColor', [0 0 0]);
     if Params.TestPulsesType == 1, freq = Params.SPfrequency; amplitude = Params.SPamplitude; symbol = '*';

@@ -1,7 +1,11 @@
 %% Softcode Handler
 function SoftCodeHandler_luminose_hf_goNogo(code)
+    global S luminose
     if code <= 7
-        parfeval(@olfactometer_hf_goNogo, 0, code);
+        % Resolved here, where S is valid; the worker only drives the valves
+        S = lhf.olf.deliver(code, S, lhf.protocolInfo('goNogo'), luminose.olfactometer);
+    elseif code == 13
+        lhf.laser.onSoftCode();  % synchronous — the laser's serial port lives in this process
     else
         dmd_hf_goNogo(code);  % synchronous — libisloaded fails on thread workers
     end

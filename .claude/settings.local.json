@@ -4,7 +4,9 @@
       "Read(//mnt/c/Users/harrislab/MATLAB/DMDController/examples/**)",
       "Read(//mnt/c/Users/harrislab/MATLAB/DMDController/+DMDController/**)",
       "Read(//mnt/c/Users/harrislab/luminoseData/calibration/**)",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(tr -d '\\\\r')",
+      "Read(//mnt/c/Users/harrislab/**)"
     ]
   }
 }

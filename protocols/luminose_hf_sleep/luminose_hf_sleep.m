@@ -41,20 +41,17 @@ function luminose_hf_sleep
     end
 
     %% Configure trials
-    S = BpodSystem.ProtocolSettings;
-    isNewSession = ~isstruct(S) || isempty(fieldnames(S));
-    if isNewSession
-        GUIparams_luminose_hf_sleep();
+    % Defaults come from GUIparams; a saved settings file is merged into them
+    % (renamed and retired settings: lhf.settingsHistory)
+    saved = BpodSystem.ProtocolSettings;
+    S = struct();
+    GUIparams_luminose_hf_sleep();
+    settingsNotes = {};
+    if ~isstruct(saved) || isempty(fieldnames(saved))
         restorePatternParams({'opto'}, luminose.dmd.patternsFolder);
     else
-        SavedGUI = S.GUI;
-        GUIparams_luminose_hf_sleep();
-        fNames = fieldnames(SavedGUI);
-        for i = 1:numel(fNames)
-            if isfield(S.GUI, fNames{i})
-                S.GUI.(fNames{i}) = SavedGUI.(fNames{i});
-            end
-        end
+        [S, settingsNotes] = lhf.mergeSettings(saved, S, 'sleep');
+        cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
     LuminoseParameterGUI_hf_sleep('init', S);
     disp('Waiting for START button...');
@@ -68,6 +65,14 @@ function luminose_hf_sleep
     S.GUI = BpodSystem.GUIData.ParameterGUI.LatestGUIParams;
     S = LuminoseParameterGUI_hf_sleep('sync', S);
     disp('START pressed — beginning experiment.');
+    sessionCleanup = onCleanup(@cleanup); %#ok<NASGU> runs on normal end and on any error
+    BpodSystem.Data.SettingsNotes = settingsNotes;
+    % One seed per session, recorded (it seeds the rand/randperm below);
+    % S.RandomSeed (edit the settings file) repeats a session once
+    requestedSeed = [];
+    if isfield(S, 'RandomSeed'), requestedSeed = S.RandomSeed; end
+    S.RandomSeed = [];
+    BpodSystem.Data.RandomSeed = lhf.random('init', requestedSeed);
 
     trialTypes = 1 + (rand(1, S.GUI.maxTrials) >= S.GUI.Typeprob);
     BpodSystem.Data.TrialTypes = [];
@@ -119,7 +124,6 @@ function luminose_hf_sleep
     BpodSystem.FlexIOConfig.channelTypes = channelTypes;
 
     sniffDetector = SniffDetector(chanSniff, 500);
-    sniffDetector.risingEdge = logical(S.GUI.SniffRising);
     sniffDetector.configure(S.GUI.SniffOnsetThreshold, S.GUI.SniffOffsetThreshold);
 
     BpodSystem.startAnalogViewer;
@@ -179,7 +183,7 @@ function luminose_hf_sleep
 
             if ~isempty(fieldnames(RawEvents))
                 BpodSystem.Data = AddTrialEvents(BpodSystem.Data, RawEvents);
-                BpodSystem.Data.TrialSettings(currentTrial) = S;
+                BpodSystem.Data.TrialSettings(currentTrial).GUI = S.GUI;
                 BpodSystem.Data.TrialTypes(currentTrial) = currentTrialType;
                 BpodSystem.Data.RawEvents.Trial{currentTrial}.Actions = currentActions;
                 BpodSystem.Data = BpodNotebook('sync', BpodSystem.Data);
@@ -218,13 +222,14 @@ function luminose_hf_sleep
                 disp(['Updated rotary encoder plot: ', num2str(toc(t3))]);
 
                 t4 = tic;
-                SaveBpodSessionData;
+                if mod(currentTrial, 5) == 0, SaveBpodSessionData; end
                 disp(['Saved data: ', num2str(toc(t4))]);
             end
             if currentTrial < S.GUI.maxTrials
                 currentActions = nextActions;
             end
         catch ME
+            BpodSystem.Data.StoppedReason = lhf.stopRecord('error', currentTrial, ME);
             disp('=== CRASH ===');
             disp(ME.message);
             for iStack = 1:length(ME.stack)
@@ -233,7 +238,13 @@ function luminose_hf_sleep
             break
         end
     end
-    cleanup;
+    if ~isfield(BpodSystem.Data, 'StoppedReason')
+        if BpodSystem.Status.BeingUsed == 0
+            BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial);
+        else
+            BpodSystem.Data.StoppedReason = lhf.stopRecord('completed', S.GUI.maxTrials);
+        end
+    end
 end
 
 %% State machine
@@ -340,10 +351,21 @@ end
 function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
     BpodSystem.Data.luminose = luminose;
+    BpodSystem.Data.GUIMeta = S.GUIMeta;
     BpodSystem.ProtocolSettings = S;
+    if ~isfield(BpodSystem.Data, 'StoppedReason')
+        BpodSystem.Data.StoppedReason = lhf.stopRecord('unknown', NaN);  % setup error or Ctrl+C
+    end
     SaveBpodSessionData;
     SaveBpodProtocolSettings;
     diary off;
+    if BpodSystem.Status.BeingUsed == 1
+        RunProtocol('Stop');
+    end
+    % With BpodSystem listed in the base workspace, MATLAB's Workspace browser
+    % works through every change the session made to it once the prompt
+    % returns, and can run MATLAB out of memory (seen in LuminoseFM).
+    evalin('base', 'clear BpodSystem');
 end
 
 function restorePatternParams(typeNames, patternsFolder)

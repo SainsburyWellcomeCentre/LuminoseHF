@@ -43,7 +43,9 @@ Bpod('COM3')
 Current protocol families include:
 
 - `protocols/luminose_hf_goNogo/` for the main go/no-go task
-- `protocols/luminose_hf_playground/` for rapid testing of stimuli, training settings, and rig integrations
+- `protocols/luminose_hf_2AFC/` and `protocols/luminose_hf_MTS/` for two-alternative choice and match-to-sample
+- `protocols/luminose_hf_powercal/` for go/no-go with a laser power per pattern trial, drawn from the pattern design's irradiance list
+- `protocols/luminose_hf_sleep/` for test pulses without behaviour
 
 ## Project layout
 
@@ -53,6 +55,13 @@ Current protocol families include:
 - `olfactometer/`: NI-DAQ based odour sequencing and bottle metadata
 - `protocols/`: behavioural tasks and their `HelperFiles`
 - `gui/`: shared GUI utilities for start control, odour selection, and trial/opto visualizations
+- `+lhf/`: code the protocols share: scoring, trial selection, live plots, odour delivery, settings loading, the end-of-session report
+- `tests/`: hardware-free tests (`cd tests; runTests`)
+- `docs/`: [architecture](docs/architecture.md), [data format](docs/data-format.md), [testing](docs/testing.md)
+
+## After a session
+
+Beside the data file, each behaviour session writes `<name>_report.md` (performance per trial type, water, response time, settings changed, why it ended) and `<name>_summary.png` (the live plots over the whole session). `Data.RandomSeed` records the session's seed; put it in `S.RandomSeed` in the settings file to repeat the session's trial order.
 
 ## Recent behaviour changes
 
@@ -64,4 +73,4 @@ Current protocol families include:
 ## Notes
 
 - Protocols require the Bpod HiFi module and rotary encoder module.
-- The playground protocol also depends on the custom top-level GUI helpers for the parameter screen and stimulus previews.
+- The protocols' parameter screens depend on the custom top-level GUI helpers for stimulus previews and odour selection.
