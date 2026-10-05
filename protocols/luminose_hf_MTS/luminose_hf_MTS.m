@@ -26,6 +26,10 @@ function luminose_hf_MTS
         [S, settingsNotes] = lhf.mergeSettings(saved, S, 'MTS');
         cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
+    % Exposures and frame counts follow the designs, not the settings file
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'cue', 'Template', 'Sample', 'opto'});
     LuminoseParameterGUI_hf_MTS('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -311,6 +315,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     stimMatchAction = {'BNC1', 1}; % sync
     delayAction = {};
     isPatternResponse = false;
+    patternShown = false;  % a match pattern is projected this trial
     isHabituation = isfield(S.GUI, 'TrainingLevel') && (S.GUI.TrainingLevel == 1);
     if isHabituation
         chooseState2 = 'GetResponse';
@@ -329,7 +334,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                 startAction{end+1} = 'SoftCode'; startAction{end+1} = 1;
             case 'Pattern'
                 cueHoldAction = {'PWM3', S.GUI.Intensity_cue}; % mask
-                cueAction{end+1} = 'SoftCode'; cueAction{end+1} = 8;
+                if ~isempty(lhf.selectedDesign('cue')), cueAction(end+1:end+2) = {'SoftCode', 8}; end  % none for a row with no spots
             case 'Light'
                 cueHoldAction = {'PWM3', S.GUI.Intensity_cue};
             case 'Sound'
@@ -351,8 +356,11 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
         stimTemplateAction = [stimTemplateAction, cueAction, cueHoldAction, templateAction];
         if templateCode == 9
             % Pattern: SoftCode displays immediately (MASTER mode) —
-            % fire it in the same state as the pattern itself.
-            stimTemplateAction{end+1} = 'SoftCode'; stimTemplateAction{end+1} = templateCode;
+            % fire it in the same state as the pattern itself. None for a
+            % row with no spots.
+            if ~isempty(lhf.selectedDesign('Template'))
+                stimTemplateAction(end+1:end+2) = {'SoftCode', templateCode};
+            end
         elseif templateCode > 0
             % Odour: dispatch ahead of time so the async valve sequence
             % (parfeval) has lead time before DeliverStimTemplate.
@@ -373,8 +381,14 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
         if sampleCode == 9 || sampleCode == 10
             % Pattern (replayed Template code 9 on Match, or Sample code 10
             % on Non-match): SoftCode displays immediately (MASTER mode) —
-            % fire it in the same state as the pattern itself.
-            stimMatchAction{end+1} = 'SoftCode'; stimMatchAction{end+1} = sampleCode;
+            % fire it in the same state as the pattern itself. None for a
+            % row with no spots.
+            matchType = 'Sample';
+            if sampleCode == 9, matchType = 'Template'; end
+            if ~isempty(lhf.selectedDesign(matchType))
+                stimMatchAction(end+1:end+2) = {'SoftCode', sampleCode};
+                patternShown = true;
+            end
             isPatternResponse = true;
         elseif sampleCode > 0
             % Odour: dispatch ahead of time so the async valve sequence
@@ -414,7 +428,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     if isPatternResponse
         responseAction{end+1} = 'PWM3'; responseAction{end+1} = S.GUI.Intensity_cue;
     end
-    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
+    if patternShown, responseAction(end+1:end+2) = {'SoftCode', 11}; end  % halt the match pattern at the response
     valveTimeLeft = GetValveTimes(S.GUI.RewardAmount, 1);
     valveTimeRight = GetValveTimes(S.GUI.RewardAmount, 2);
     if currentTrialType == 1, valveTime = valveTimeLeft; rewardAction = {'Valve1', 1, 'BNC1', 1};

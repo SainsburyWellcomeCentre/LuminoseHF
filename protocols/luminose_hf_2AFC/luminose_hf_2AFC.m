@@ -26,6 +26,10 @@ function luminose_hf_2AFC
         [S, settingsNotes] = lhf.mergeSettings(saved, S, '2AFC');
         cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
+    % Exposures and frame counts follow the designs, not the settings file
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'cue', 'Left', 'Right', 'opto'});
     LuminoseParameterGUI_hf_2AFC('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -314,6 +318,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     startAction = {'BNC1', 1, 'HiFi1', '*', 'RotaryEncoder1', ['#' 0], 'AnalogThreshEnable', 1};
     cueAction = {'RotaryEncoder1', '*Z'};
     stimAction = {'BNC1', 1}; % sync
+    patternShown = false;  % a stimulus pattern is projected this trial
     isHabituation = isfield(S.GUI, 'TrainingLevel') && (S.GUI.TrainingLevel == 1);
     if isHabituation
         CueTime = 0;
@@ -334,7 +339,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                 startAction{end+1} = 'SoftCode'; startAction{end+1} = 1;
             case 'Pattern'
                 cueAction{end+1} = 'PWM3'; cueAction{end+1} = S.GUI.Intensity_cue; % mask
-                cueAction{end+1} = 'SoftCode'; cueAction{end+1} = 8;
+                if ~isempty(lhf.selectedDesign('cue')), cueAction(end+1:end+2) = {'SoftCode', 8}; end  % none for a row with no spots
             case 'Light'
                 cueAction{end+1} = 'PWM3'; cueAction{end+1} = S.GUI.Intensity_cue;
             case 'Sound'
@@ -350,7 +355,10 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                         responseAction = {};
                     case 'Pattern'
                         stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                        stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 9;
+                        if ~isempty(lhf.selectedDesign('Left'))  % none for a row with no spots
+                            stimAction(end+1:end+2) = {'SoftCode', 9};
+                            patternShown = true;
+                        end
                         chooseState2 = patternStart;
                         responseAction = {'PWM3', S.GUI.Intensity_cue};
                     case 'Light'
@@ -378,7 +386,10 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                         responseAction = {};
                     case 'Pattern'
                         stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                        stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 10;
+                        if ~isempty(lhf.selectedDesign('Right'))  % none for a row with no spots
+                            stimAction(end+1:end+2) = {'SoftCode', 10};
+                            patternShown = true;
+                        end
                         chooseState2 = patternStart;
                         responseAction = {'PWM3', S.GUI.Intensity_cue};
                     case 'Light'
@@ -409,7 +420,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
             chooseState1 = 'InitRE';
             responseAction{end+1} = 'RotaryEncoder1'; responseAction{end+1} = ['Z;' 3];
     end
-    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
+    if patternShown, responseAction(end+1:end+2) = {'SoftCode', 11}; end  % halt the stimulus pattern at the response
     valveTimeLeft = GetValveTimes(S.GUI.RewardAmount, 1);
     valveTimeRight = GetValveTimes(S.GUI.RewardAmount, 2);
     if currentTrialType == 1, valveTime = valveTimeLeft; rewardAction = {'Valve1', 1, 'BNC1', 1};

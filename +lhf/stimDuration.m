@@ -15,8 +15,7 @@ function seconds = stimDuration(GUI, kind, type, which)
 %   Pattern       the row's design as the DMD plays it (lhf.patternDuration);
 %                 this trial's row is BpodSystem.PluginObjects.SelectedPatternRow.<type>.
 %                 A row with no design shows nothing and lasts 0; a blank
-%                 design (no spots and a blankMs field, in memory) shows
-%                 nothing for blankMs.
+%                 design (saved with no spots) shows nothing for its blankMs.
 %
 %   The protocols time their cue and stimulus states with it, so the next
 %   state (the response window) starts as the stimulus ends.
@@ -67,11 +66,10 @@ function seconds = patternRowDuration(designs, type, row, exposureUs)
 % powercal's default CS+) shows nothing for blankMs; no design lasts 0.
     global luminose
     seconds = 0;
-    design = lhf.patternDesign(designs, luminose.dmd, type, row);
+    [design, blankMs] = lhf.patternDesign(designs, luminose.dmd, type, row);
     if ~isempty(design)
         seconds = lhf.patternDuration(design, exposureUs, row);
-    elseif isfield(designs, type) && row <= numel(designs.(type)) && ...
-           isfield(designs.(type){row}, 'blankMs')
-        seconds = designs.(type){row}.blankMs / 1000;
+    else
+        seconds = blankMs / 1000;
     end
 end

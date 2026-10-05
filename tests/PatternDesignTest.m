@@ -89,6 +89,50 @@ classdef PatternDesignTest < matlab.unittest.TestCase
             tc.verifyEqual(lhf.patternDuration(d, 20000, 3), 0.26, 'AbsTol', 1e-12);  % last exposure for later rows
         end
 
+        function aBlankSavedWithNoSpotsShowsNothingForItsLength(tc)
+            % the Pattern Designer saves a blank: no spots, blankMs = its tick
+            spots = struct('x', {}, 'y', {}, 'onset_ms', {}, 'dur_ms', {}, 'isFixed', {}); %#ok<NASGU>
+            tickMs = 81; r_px = 23; nF = 1; blankMs = 81; %#ok<NASGU>
+            save(fullfile(tc.shared, 'designed_CSplus_r1_20261005_000000_meta.mat'), ...
+                'spots', 'tickMs', 'r_px', 'nF', 'blankMs');
+            [d, ms] = lhf.patternDesign(struct(), tc.dmd, 'CSplus', 1);
+            tc.verifyEmpty(d);  % nothing to project
+            tc.verifyEqual(ms, 81);
+            [~, ms] = lhf.patternDesign(struct(), tc.dmd, 'CSplus', 2);
+            tc.verifyEqual(ms, 0);  % no design at all
+
+            g.patternProbs_CSplus = 1;
+            g.patternExposure_CSplus = 1e6;
+            g.patternNFrames_CSplus = 3;
+            g = lhf.patternTiming(g, struct(), tc.dmd, {'CSplus'});
+            tc.verifyEqual(g.patternExposure_CSplus, 81000);  % one frame of 81 ms
+            tc.verifyEqual(g.patternNFrames_CSplus, 1);
+
+            global BpodSystem luminose %#ok<GVMIS>
+            saved = {BpodSystem, luminose};
+            tc.addTeardown(@restoreGlobals, saved);
+            BpodSystem = struct('PluginObjects', struct());
+            BpodSystem.PluginObjects.SelectedPatternRow.CSplus = 1;
+            luminose = struct('dmd', tc.dmd);
+            tc.verifyEqual(lhf.stimDuration(g, 'Pattern', 'CSplus'), 0.081, 'AbsTol', 1e-12);
+        end
+
+        function exposuresFollowTheDesignsNotTheSettings(tc)
+            % row 1 saved with a 10 ms tick (one 80 ms spot: 8 frames); the
+            % settings still carry an older 80 ms exposure; row 2 has no design
+            saveDesign(tc.shared, 'CSminus', 'r1_20261005_000000', 100);
+            m = load(fullfile(tc.shared, 'designed_CSminus_r1_20261005_000000_meta.mat'));
+            m.tickMs = 10;
+            save(fullfile(tc.shared, 'designed_CSminus_r1_20261005_000000_meta.mat'), '-struct', 'm');
+            g.patternProbs_CSminus = [0.5 0.5];
+            g.patternExposure_CSminus = [80000 5000];
+            g.patternNFrames_CSminus = [1 3];
+            g = lhf.patternTiming(g, struct(), tc.dmd, {'CSminus', 'opto'});
+            tc.verifyEqual(g.patternExposure_CSminus, [10000 5000]);
+            tc.verifyEqual(g.patternNFrames_CSminus, [8 3]);
+            tc.verifyFalse(isfield(g, 'patternExposure_opto'));  % a type without rows is left alone
+        end
+
         function eachKindLastsAsLongAsWhatItShows(tc)
             global BpodSystem luminose %#ok<GVMIS>
             saved = {BpodSystem, luminose};

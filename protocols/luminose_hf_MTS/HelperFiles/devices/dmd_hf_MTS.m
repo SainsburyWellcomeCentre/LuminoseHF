@@ -42,7 +42,7 @@ function dmd_hf_MTS(code, codes)
                     if isempty(typeName), continue; end
                     rowIdx = selectedRow(BpodSystem, typeName);
                     design = getDesign(BpodSystem, typeName, rowIdx, luminose.dmd.patternsFolder);
-                    if isempty(design)
+                    if isempty(design) || isempty(design.spots)  % none, or a blank
                         dmd_log(logFile, 'no design found for %s row %d — skipping', typeName, rowIdx);
                         continue;
                     end

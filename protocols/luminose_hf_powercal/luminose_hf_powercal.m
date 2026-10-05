@@ -32,6 +32,10 @@ function luminose_hf_powercal
         cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
     S = loadPowercalDesigns(S, luminose.dmd);
+    % Exposures and frame counts follow the designs, not the settings file
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'cue', 'CSplus', 'CSminus', 'opto'});
     LuminoseParameterGUI_hf_powercal('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -345,10 +349,12 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     chooseState2 = 'DeliverStim';
                 case 'Pattern'
                     stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                    if ~isempty(lhf.selectedDesign('CSplus')), stimAction(end+1:end+2) = {'SoftCode', 9}; end  % none by default
+                    if ~isempty(lhf.selectedDesign('CSplus'))  % no soft codes for a row with no spots (the default)
+                        stimAction(end+1:end+2) = {'SoftCode', 9};
+                        responseAction(end+1:end+2) = {'SoftCode', 11};  % halt at the response
+                    end
                     chooseState2 = patternStart;
                     responseAction{end+1} = 'PWM3'; responseAction{end+1} = S.GUI.Intensity_cue;
-                    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
                 case 'Light'
                     stimAction{end+1} = 'PWM1'; stimAction{end+1} = S.GUI.Intensity_CSplus;
                     chooseState2 = 'DeliverStim';
@@ -365,10 +371,12 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     chooseState2 = 'DeliverStim';
                 case 'Pattern'
                     stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                    if ~isempty(lhf.selectedDesign('CSminus')), stimAction(end+1:end+2) = {'SoftCode', 10}; end
+                    if ~isempty(lhf.selectedDesign('CSminus'))  % no soft codes for a row with no spots
+                        stimAction(end+1:end+2) = {'SoftCode', 10};
+                        responseAction(end+1:end+2) = {'SoftCode', 11};  % halt at the response
+                    end
                     chooseState2 = patternStart;
                     responseAction{end+1} = 'PWM3'; responseAction{end+1} = S.GUI.Intensity_cue;
-                    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
                 case 'Light'
                     stimAction{end+1} = 'PWM4'; stimAction{end+1} = S.GUI.Intensity_CSminus;
                     chooseState2 = 'DeliverStim';
@@ -532,9 +540,9 @@ end
 function S = loadPowercalDesigns(S, dmdConfig)
 % The CS+ and CS- designs for this session, from powercal's own files only:
 % designs another protocol left in memory are replaced. A row without a
-% saved design shows nothing, except row 1: CS- defaults to a single spot at
-% the DMD centre (centralSpotDesign) and CS+ to no spots for as long
-% (blankDesign), so both stimuli last defaultStimMs and the response window
+% saved design shows nothing, except row 1 with neither spots nor a blank
+% saved: CS- defaults to a single spot at the DMD centre (centralSpotDesign)
+% and CS+ to no spots for as long (blankDesign), so both stimuli last defaultStimMs and the response window
 % opens at the same time after the sniff. Designing a row in the Pattern
 % Designer saves it as powercal's and replaces the default.
     global BpodSystem
@@ -546,23 +554,26 @@ function S = loadPowercalDesigns(S, dmdConfig)
         nRows = numel(S.GUI.(['patternProbs_' patternType]));
         designs = cell(1, nRows);
         for row = 1:nRows
-            design = lhf.patternDesign(struct(), dmdConfig, patternType, row);
+            [design, blankMs] = lhf.patternDesign(struct(), dmdConfig, patternType, row);
             if isempty(design)
                 design = noDesign();  % known to be empty: no file lookup per trial
+                if blankMs > 0, design = blankDesign(blankMs); end  % a blank saved in the designer
             end
             designs{row} = design;
         end
         BpodSystem.PluginObjects.PatternDesigns.(patternType) = designs;
     end
-    if isempty(BpodSystem.PluginObjects.PatternDesigns.CSminus{1}.spots)
+    if isUnsaved(BpodSystem.PluginObjects.PatternDesigns.CSminus{1})
         [design, exposureUs] = centralSpotDesign(dmdConfig);
         BpodSystem.PluginObjects.PatternDesigns.CSminus{1} = design;
         S.GUI.patternNFrames_CSminus(1) = design.nF;
         S.GUI.patternExposure_CSminus(1) = exposureUs;
         fprintf('CS- row 1: no powercal design saved, using the central spot.\n');
     end
-    if isempty(BpodSystem.PluginObjects.PatternDesigns.CSplus{1}.spots)
-        BpodSystem.PluginObjects.PatternDesigns.CSplus{1} = blankDesign();
+    if isUnsaved(BpodSystem.PluginObjects.PatternDesigns.CSplus{1})
+        BpodSystem.PluginObjects.PatternDesigns.CSplus{1} = blankDesign(defaultStimMs());
+        S.GUI.patternNFrames_CSplus(1) = 1;  % as the CS- spot: one 80 ms frame (the table shows it)
+        S.GUI.patternExposure_CSplus(1) = defaultStimMs() * 1000;
         fprintf('CS+ row 1: no powercal design saved, showing no spots for %d ms.\n', defaultStimMs());
     end
 end
@@ -577,11 +588,18 @@ function design = noDesign()
     design = struct('spots', spots, 'tickMs', 1, 'r_px', 1, 'nF', 0);
 end
 
-function design = blankDesign()
-% The default CS+: no spots, so nothing is projected (no soft code, no laser
-% power), lasting defaultStimMs (lhf.stimDuration reads blankMs)
+function tf = isUnsaved(design)
+% Neither spots nor a blank saved for the row
+    tf = isempty(design.spots) && ~isfield(design, 'blankMs');
+end
+
+function design = blankDesign(ms)
+% No spots, so nothing is projected (no soft code, no laser power), lasting
+% ms (lhf.stimDuration reads blankMs); its tick is the same, so the Pattern
+% Designer opens it at that length. The default CS+ is one of defaultStimMs.
     design = noDesign();
-    design.blankMs = defaultStimMs();
+    design.tickMs = ms;
+    design.blankMs = ms;
 end
 
 function [design, exposureUs] = centralSpotDesign(dmdConfig)

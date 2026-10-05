@@ -26,6 +26,10 @@ function luminose_hf_goNogo
         [S, settingsNotes] = lhf.mergeSettings(saved, S, 'goNogo');
         cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
+    % Exposures and frame counts follow the designs, not the settings file
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'cue', 'CSplus', 'CSminus', 'opto'});
     LuminoseParameterGUI_hf_goNogo('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -314,7 +318,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
             startAction{end+1} = 'SoftCode'; startAction{end+1} = 1;
         case 'Pattern'
             cueAction{end+1} = 'PWM3'; cueAction{end+1} = S.GUI.Intensity_cue; % mask
-            cueAction{end+1} = 'SoftCode'; cueAction{end+1} = 8;
+            if ~isempty(lhf.selectedDesign('cue')), cueAction(end+1:end+2) = {'SoftCode', 8}; end  % none for a row with no spots
         case 'Light'
             cueAction{end+1} = 'PWM3'; cueAction{end+1} = S.GUI.Intensity_cue;
         case 'Sound'
@@ -331,10 +335,12 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     chooseState2 = 'DeliverStim';
                 case 'Pattern'
                     stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                    stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 9;
+                    if ~isempty(lhf.selectedDesign('CSplus'))  % no soft codes for a row with no spots
+                        stimAction(end+1:end+2) = {'SoftCode', 9};
+                        responseAction(end+1:end+2) = {'SoftCode', 11};  % halt at the response
+                    end
                     chooseState2 = patternStart;
                     responseAction{end+1} = 'PWM3'; responseAction{end+1} = S.GUI.Intensity_cue;
-                    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
                 case 'Light'
                     stimAction{end+1} = 'PWM1'; stimAction{end+1} = S.GUI.Intensity_CSplus;
                     chooseState2 = 'DeliverStim';
@@ -351,10 +357,12 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
                     chooseState2 = 'DeliverStim';
                 case 'Pattern'
                     stimAction{end+1} = 'PWM3'; stimAction{end+1} = S.GUI.Intensity_cue; % mask
-                    stimAction{end+1} = 'SoftCode'; stimAction{end+1} = 10;
+                    if ~isempty(lhf.selectedDesign('CSminus'))  % no soft codes for a row with no spots
+                        stimAction(end+1:end+2) = {'SoftCode', 10};
+                        responseAction(end+1:end+2) = {'SoftCode', 11};  % halt at the response
+                    end
                     chooseState2 = patternStart;
                     responseAction{end+1} = 'PWM3'; responseAction{end+1} = S.GUI.Intensity_cue;
-                    responseAction{end+1} = 'SoftCode'; responseAction{end+1} = 11;
                 case 'Light'
                     stimAction{end+1} = 'PWM4'; stimAction{end+1} = S.GUI.Intensity_CSminus;
                     chooseState2 = 'DeliverStim';

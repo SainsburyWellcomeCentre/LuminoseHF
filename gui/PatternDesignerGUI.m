@@ -23,7 +23,8 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
 %   Overlay panel: load any other saved pattern type as a visual reference.
 %   Delete Spot #N: remove a single spot by its number.
 %   Clear All: remove all spots.
-%   Save Pattern: write to BpodSystem and disk.
+%   Save Pattern: write to BpodSystem and disk. With no spots it saves a
+%     blank (after asking): nothing is shown and the stimulus lasts the Tick.
 
     if nargin < 2 || isempty(rowIdx), rowIdx = 1; end
     if nargin < 3, preloadFromType = ''; end
@@ -151,31 +152,42 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         'HorizontalAlignment', 'left');
     updateSpotInfo();
 
-    % --- Laser power for this pattern (below the canvas) ---
-    hLaserIrr = [];
-    hLaserW = [];
+    % --- Laser power for this pattern (below the canvas): one row per
+    %     irradiance; each trial showing the pattern draws one with its Prob ---
+    hLaserTable = [];
+    laserSelRow = [];
     if laserOn
         uicontrol(fig, 'Style', 'text', 'String', 'LASER POWER (this pattern)', ...
-            'Position', [15 146 CAN_W 22], 'FontSize', 10, 'FontWeight', 'bold', ...
+            'Position', [15 146 210 22], 'FontSize', 10, 'FontWeight', 'bold', ...
             'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.8 0.8 0.8], ...
             'HorizontalAlignment', 'left');
-        uicontrol(fig, 'Style', 'text', 'String', 'Irradiance (mW/mm2)', ...
-            'Position', [15 114 150 22], 'FontSize', 10, ...
-            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.75 0.75 0.75], ...
+        uicontrol(fig, 'Style', 'text', 'String', calibratedRangeText(luminose), ...
+            'Position', [225 146 CAN_W-210 22], 'FontSize', 9, ...
+            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.55 0.75 0.95], ...
             'HorizontalAlignment', 'left');
-        hLaserIrr = uicontrol(fig, 'Style', 'edit', 'String', mat2str(laser.irradiances), ...
-            'Position', [170 114 300 24], 'FontSize', 11, ...
-            'BackgroundColor', [0.22 0.22 0.25], 'ForegroundColor', [1 1 1]);
-        uicontrol(fig, 'Style', 'text', 'String', 'Draw weights', ...
-            'Position', [15 82 150 22], 'FontSize', 10, ...
-            'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.75 0.75 0.75], ...
-            'HorizontalAlignment', 'left');
-        hLaserW = uicontrol(fig, 'Style', 'edit', 'String', mat2str(laser.weights), ...
-            'Position', [170 82 300 24], 'FontSize', 11, ...
-            'BackgroundColor', [0.22 0.22 0.25], 'ForegroundColor', [1 1 1]);
+        hLaserTable = uitable(fig, ...
+            'Data', laserRows(laser.irradiances, laser.weights), ...
+            'ColumnName', {'Irradiance (mW/mm2)', 'Prob'}, ...
+            'ColumnWidth', {170, 100}, ...
+            'ColumnEditable', [true true], ...
+            'ColumnFormat', {'numeric', 'numeric'}, ...
+            'Position', [15 40 330 102], 'FontSize', 10, ...
+            'BackgroundColor', [0.2 0.2 0.22; 0.17 0.17 0.19], ...
+            'ForegroundColor', [0.9 0.9 0.9], ...
+            'CellEditCallback', @onLaserEdit, ...
+            'CellSelectionCallback', @onLaserSelect);
+        uicontrol(fig, 'Style', 'pushbutton', 'String', '+ Add irradiance', ...
+            'Position', [355 112 157 28], 'FontSize', 9, ...
+            'BackgroundColor', [0.25 0.25 0.3], 'ForegroundColor', [1 1 1], ...
+            'Callback', @onLaserAdd);
+        uicontrol(fig, 'Style', 'pushbutton', 'String', '- Remove selected', ...
+            'Position', [355 78 157 28], 'FontSize', 9, ...
+            'BackgroundColor', [0.25 0.25 0.3], 'ForegroundColor', [1 1 1], ...
+            'Callback', @onLaserRemove);
         uicontrol(fig, 'Style', 'text', ...
-            'String', 'Each trial showing this pattern draws one irradiance (weighted). Must be within the power calibration.', ...
-            'Position', [15 40 CAN_W 34], 'FontSize', 8, ...
+            'String', ['One row per irradiance. Each trial showing this pattern draws one ' ...
+                'with its Prob; the probabilities are rescaled to sum to 1.'], ...
+            'Position', [15 4 CAN_W 32], 'FontSize', 8, ...
             'BackgroundColor', [0.13 0.13 0.15], 'ForegroundColor', [0.5 0.5 0.5], ...
             'HorizontalAlignment', 'left');
     end
@@ -502,6 +514,33 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         updateDefaultTick();
     end
 
+    function onLaserEdit(~, ev)
+        if ev.Indices(1, 2) == 2  % a Prob: rescale all to sum to 1
+            set(hLaserTable, 'Data', normalizeLaserProbs(get(hLaserTable, 'Data')));
+        end
+    end
+
+    function onLaserSelect(~, ev)
+        if ~isempty(ev.Indices), laserSelRow = ev.Indices(1, 1); end
+    end
+
+    function onLaserAdd(~, ~)
+        rows = get(hLaserTable, 'Data');
+        rows(end+1, :) = {[], 0};
+        rows(:, 2) = {round(1 / size(rows, 1), 4)};  % equal probabilities, as the pattern table's +
+        set(hLaserTable, 'Data', rows);
+    end
+
+    function onLaserRemove(~, ~)
+        rows = get(hLaserTable, 'Data');
+        if size(rows, 1) <= 1, return; end  % keep one row
+        k = laserSelRow;
+        if isempty(k) || k > size(rows, 1), k = size(rows, 1); end  % none selected: the last
+        rows(k, :) = [];
+        laserSelRow = [];
+        set(hLaserTable, 'Data', normalizeLaserProbs(rows));
+    end
+
     function onSpotSide(~, ~)
         mm = str2double(get(hSpotSide, 'String'));
         if isnan(mm) || mm <= 0
@@ -557,36 +596,52 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
     end
 
     function onSave(~, ~)
-        if isempty(spots)
-            msgbox('Place at least one spot before saving.', 'No spots', 'warn');
-            return
-        end
-        if any([spots.dur_ms] <= 0)
-            msgbox('All spots must have Duration > 0.', 'Invalid duration', 'warn');
-            return
-        end
         tickMs = str2double(get(hTickMs, 'String'));
         if isnan(tickMs) || tickMs <= 0
             msgbox('Tick (ms) must be a positive number.', 'Invalid tick', 'warn');
             return
         end
-        totalDur = max([spots.onset_ms] + [spots.dur_ms]);
-        nF       = ceil(totalDur / tickMs);
+        % No spots: a blank pattern, which projects nothing (no DMD sequence,
+        % no laser power) while the stimulus lasts the tick (blankMs)
+        isBlank = isempty(spots);
+        if isBlank
+            answer = questdlg(sprintf(['No spots placed. Save a blank pattern? It shows nothing ' ...
+                '(no DMD sequence, no laser) and the stimulus lasts the Tick, %g ms.'], tickMs), ...
+                'Blank pattern', 'Save blank', 'Cancel', 'Cancel');
+            if ~strcmp(answer, 'Save blank'), return; end
+            nF = 1;
+            blankMs = tickMs;
+        else
+            if any([spots.dur_ms] <= 0)
+                msgbox('All spots must have Duration > 0.', 'Invalid duration', 'warn');
+                return
+            end
+            totalDur = max([spots.onset_ms] + [spots.dur_ms]);
+            nF       = ceil(totalDur / tickMs);
+        end
+        withLaser = laserOn && ~isBlank;  % a blank sets no laser power
 
         laserIrradiances_mWmm2 = [];
         laserWeights = [];
-        if laserOn
-            laserIrradiances_mWmm2 = str2num(get(hLaserIrr, 'String')); %#ok<ST2NM> accepts [2 5 8]
-            laserWeights = str2num(get(hLaserW, 'String')); %#ok<ST2NM>
-            if isempty(laserWeights), laserWeights = ones(size(laserIrradiances_mWmm2)); end
+        if withLaser
+            % Rows with no irradiance are ignored; the probabilities are saved
+            % as the draw weights (lhf.laser.draw rescales them)
+            rows = get(hLaserTable, 'Data');
+            laserIrradiances_mWmm2 = cellfun(@cellNumber, rows(:, 1))';
+            laserWeights = cellfun(@cellNumber, rows(:, 2))';
+            keep = ~isnan(laserIrradiances_mWmm2);
+            laserIrradiances_mWmm2 = laserIrradiances_mWmm2(keep);
+            laserWeights = laserWeights(keep);
+            laserWeights(isnan(laserWeights) | laserWeights < 0) = 0;
             if isempty(laserIrradiances_mWmm2) || any(laserIrradiances_mWmm2 <= 0)
-                msgbox('Irradiance must be one or more positive values, e.g. [2 5 8].', 'Invalid laser power', 'warn');
+                msgbox('Add at least one irradiance, every one above 0 mW/mm2.', 'Invalid laser power', 'warn');
                 return
             end
-            if numel(laserWeights) ~= numel(laserIrradiances_mWmm2) || any(laserWeights < 0) || sum(laserWeights) == 0
-                msgbox('Give one non-negative draw weight per irradiance (not all zero).', 'Invalid weights', 'warn');
+            if sum(laserWeights) == 0
+                msgbox('Give at least one irradiance a Prob above 0.', 'Invalid probabilities', 'warn');
                 return
             end
+            laserWeights = round(laserWeights / sum(laserWeights), 4);
             try
                 irradianceToSetpoint_mW(laserIrradiances_mWmm2, luminose);  % every value within the calibration
             catch err
@@ -605,10 +660,11 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
             BpodSystem.PluginObjects.PatternDesigns.(patternType) = {};
         end
         design = struct('spots', spots, 'tickMs', tickMs, 'r_px', r_px, 'nF', nF);
-        if laserOn
+        if withLaser
             design.laserIrradiances_mWmm2 = laserIrradiances_mWmm2;
             design.laserWeights = laserWeights;
         end
+        if isBlank, design.blankMs = blankMs; end
         BpodSystem.PluginObjects.PatternDesigns.(patternType){rowIdx} = design;
 
         patternsFolder = lhf.patternFolder(luminose.dmd, patternType);
@@ -617,21 +673,25 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         fileType  = lhf.patternFileType(luminose.dmd, patternType);  % a protocol may save the type under its own name
         prefix    = sprintf('designed_%s_r%d_%s', fileType, rowIdx, timestamp);
         metaFile  = fullfile(patternsFolder, sprintf('%s_meta.mat', prefix));
-        if laserOn
-            save(metaFile, 'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix', ...
-                'laserIrradiances_mWmm2', 'laserWeights');
-        else
-            save(metaFile, 'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix');
-        end
+        saved = {'spots', 'tickMs', 'r_px', 'nF', 'timestamp', 'prefix'};
+        if withLaser, saved = [saved, {'laserIrradiances_mWmm2', 'laserWeights'}]; end
+        if isBlank, saved{end+1} = 'blankMs'; end
+        save(metaFile, saved{:});
 
         if isfield(BpodSystem.GUIHandles.ParameterGUI, 'PatternSelectorTables') && ...
            isfield(BpodSystem.GUIHandles.ParameterGUI.PatternSelectorTables, patternType)
             ptable = BpodSystem.GUIHandles.ParameterGUI.PatternSelectorTables.(patternType);
             if ishandle(ptable)
                 tdata = get(ptable, 'Data');
-                while size(tdata,1) < rowIdx, tdata(end+1,:) = {0, 0, 1e6}; end
+                padRow = {0, 0, 1000, 'none'};
+                while size(tdata,1) < rowIdx, tdata(end+1,:) = padRow(1:size(tdata,2)); end
                 tdata{rowIdx, 2} = numel(spots);
-                tdata{rowIdx, 3} = tickMs * 1000;
+                tdata{rowIdx, 3} = tickMs;  % the table shows ms
+                if size(tdata, 2) >= 4  % the laser column (lhf.laser.describe; none for a blank)
+                    shown = design;
+                    if isBlank, shown = []; end
+                    tdata{rowIdx, 4} = lhf.laser.describe(shown, patternType, S);
+                end
                 set(ptable, 'Data', tdata);
             end
         end
@@ -645,11 +705,15 @@ function PatternDesignerGUI(patternType, rowIdx, preloadFromType)
         S.GUI.(sprintf('patternNFrames_%s',  patternType)) = nFVec;
         S.GUI.(sprintf('patternExposure_%s', patternType)) = expVec;
 
-        hasRandom = any(~[spots.isFixed]);
-        typeStr   = 'all fixed';
-        if hasRandom, typeStr = 'includes random spots'; end
-        msgbox(sprintf('Row %d: %d frames, tick=%gms, %s.', rowIdx, nF, tickMs, typeStr), ...
-            'Pattern saved', 'help');
+        if isBlank
+            msgbox(sprintf('Row %d: blank, shows nothing for %g ms.', rowIdx, tickMs), 'Pattern saved', 'help');
+        else
+            hasRandom = any(~[spots.isFixed]);
+            typeStr   = 'all fixed';
+            if hasRandom, typeStr = 'includes random spots'; end
+            msgbox(sprintf('Row %d: %d frames, tick=%gms, %s.', rowIdx, nF, tickMs, typeStr), ...
+                'Pattern saved', 'help');
+        end
         delete(fig);
     end
 
@@ -1097,5 +1161,40 @@ function [spots, tickMs] = tryLoadMeta(patternsFolder, patternType, imgIdx) %#ok
         spots = m.spots;
         if isfield(m, 'tickMs'), tickMs = m.tickMs; end
     catch
+    end
+end
+
+function rows = laserRows(irradiances, weights)
+% The laser table's rows: irradiance, probability
+    if numel(weights) ~= numel(irradiances), weights = ones(size(irradiances)); end
+    rows = [num2cell(irradiances(:)), num2cell(weights(:))];
+    if isempty(rows), rows = {[], 1}; end
+    rows = normalizeLaserProbs(rows);
+end
+
+function rows = normalizeLaserProbs(rows)
+% Probabilities summing to 1 (all 0: equal), as the pattern table's Prob
+    p = cellfun(@cellNumber, rows(:, 2));
+    p(isnan(p) | p < 0) = 0;
+    if sum(p) == 0, p = ones(size(p)); end
+    p = p / sum(p);
+    for k = 1:size(rows, 1), rows{k, 2} = round(p(k), 4); end
+end
+
+function v = cellNumber(c)
+% A table cell as a number (NaN when empty)
+    if isempty(c), v = NaN;
+    elseif ischar(c) || isstring(c), v = str2double(c);
+    else, v = double(c);
+    end
+end
+
+function text = calibratedRangeText(luminose)
+% The irradiances the power calibration covers, for the laser table
+    try
+        irr = irradianceCalibration(luminose);
+        text = sprintf('Calibrated range: %.2f - %.2f mW/mm2', min(irr), max(irr));
+    catch
+        text = 'No power calibration found (dmd/power_calibration.csv)';
     end
 end

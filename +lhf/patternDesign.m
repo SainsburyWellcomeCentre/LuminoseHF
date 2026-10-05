@@ -1,7 +1,7 @@
-function design = patternDesign(designs, dmdConfig, patternType, row)
+function [design, blankMs] = patternDesign(designs, dmdConfig, patternType, row)
 % lhf.patternDesign  One row's pattern design, or [] when the row has none.
 %
-%   design = lhf.patternDesign(BpodSystem.PluginObjects.PatternDesigns, luminose.dmd, type, row)
+%   [design, blankMs] = lhf.patternDesign(BpodSystem.PluginObjects.PatternDesigns, luminose.dmd, type, row)
 %
 %   designs  the designs in memory (struct of cells by type; struct() for none)
 %
@@ -9,6 +9,11 @@ function design = patternDesign(designs, dmdConfig, patternType, row)
 %   file (lhf.patternFileType) in lhf.patternFolder (for row 1 also an older file without a row
 %   index). A design with no spots counts as none, so [] always means
 %   "nothing to show": no DMD sequence and no soft code.
+%
+%   blankMs  for a blank design (no spots, saved by the Pattern Designer or
+%            powercal's default CS+), how long it shows nothing (its blankMs
+%            field); 0 otherwise. The stimulus still lasts that long
+%            (lhf.stimDuration).
 %
 %   design fields: spots (x, y, onset_ms, dur_ms, isFixed), tickMs, r_px, nF,
 %   and laserIrradiances_mWmm2, laserWeights when the design has laser options
@@ -20,7 +25,9 @@ function design = patternDesign(designs, dmdConfig, patternType, row)
     else
         design = loadNewest(lhf.patternFolder(dmdConfig, patternType), lhf.patternFileType(dmdConfig, patternType), row);
     end
+    blankMs = 0;
     if isempty(design) || ~isfield(design, 'spots') || isempty(design.spots)
+        if isstruct(design) && isfield(design, 'blankMs'), blankMs = design.blankMs; end
         design = [];
     end
 end
@@ -43,6 +50,7 @@ function design = loadNewest(folder, fileType, row)
         nF = 1;
         if isfield(m, 'nF'), nF = m.nF; end
         design = struct('spots', m.spots, 'tickMs', m.tickMs, 'r_px', m.r_px, 'nF', nF);
+        if isfield(m, 'blankMs'), design.blankMs = m.blankMs; end  % a blank, saved with no spots
         if isfield(m, 'laserIrradiances_mWmm2')  % saved by the Pattern Designer with laser options
             design.laserIrradiances_mWmm2 = m.laserIrradiances_mWmm2;
             design.laserWeights = m.laserWeights;

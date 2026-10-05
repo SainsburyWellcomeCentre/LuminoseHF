@@ -51,7 +51,7 @@ Until 2026-09-29 (files without `RandomSeed`), 2AFC and MTS scored a trial with 
 
 `S.GUI` values, `S.GUIMeta`/`GUIPanels`/`GUITabs` declarations, and `S.RandomSeed` (normally empty).
 
-Pattern designs (`designed_<type>_r<row>_<time>_meta.mat`) hold `spots`, `tickMs`, `r_px`, `nF`, and for types with laser options `laserIrradiances_mWmm2` and `laserWeights`.
+Pattern designs (`designed_<type>_r<row>_<time>_meta.mat`) hold `spots`, `tickMs`, `r_px`, `nF`, for types with laser options `laserIrradiances_mWmm2` and `laserWeights`, and for a blank (saved with no spots) `blankMs`, how long it shows nothing (its tick).
 
 ### Settings history
 

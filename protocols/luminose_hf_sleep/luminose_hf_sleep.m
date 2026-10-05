@@ -53,6 +53,10 @@ function luminose_hf_sleep
         [S, settingsNotes] = lhf.mergeSettings(saved, S, 'sleep');
         cellfun(@(note) fprintf('Settings: %s\n', note), settingsNotes);
     end
+    % Exposures and frame counts follow the designs, not the settings file
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'opto'});
     LuminoseParameterGUI_hf_sleep('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);

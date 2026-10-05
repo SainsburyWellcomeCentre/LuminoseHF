@@ -35,8 +35,8 @@ Nothing in `tests/` opens a device, a COM port or Bpod, so the suite can run whi
 | `OdourDeliveryTest` | `lhf.olf.resolve`: single rows, probability draws, fixed rows (drawn as the trial is prepared), padding zeros dropped, repeatability, unknown codes; `lhf.olf.drawRows`; `lhf.olf.sequenceDuration` |
 | `LivePlotsTest` | every `lhf.plot` panel in an invisible window, including that only new trials are read; the power panel only when asked for, grouping by irradiance and leaving out NaN |
 | `ReportTest` | `lhf.report.summary` and `write` (to a temporary folder), that `write` never throws, `lhf.stopRecord` |
-| `PatternDesignTest` | `lhf.patternFolder`, `lhf.patternFileType` (a type saved under its own name), `lhf.patternDesign` (newest file per row, memory first, empty designs, old files without a row), `lhf.patternDuration` and `lhf.stimDuration` (how long a cue or stimulus lasts, every kind) |
-| `LaserTest` | `lhf.laser.options` (a design's list, the type's defaults, bad weights), `lhf.laser.draw` drawing and queuing nothing without the laser |
+| `PatternDesignTest` | `lhf.patternFolder`, `lhf.patternFileType` (a type saved under its own name), `lhf.patternDesign` (newest file per row, memory first, empty designs, old files without a row), `lhf.patternDuration` and `lhf.stimDuration` (how long a cue or stimulus lasts, every kind), `lhf.patternTiming` (exposures follow the designs), blank designs saved with no spots |
+| `LaserTest` | `lhf.laser.options` (a design's list, the type's defaults, bad weights), `lhf.laser.draw` drawing and queuing nothing without the laser, `lhf.laser.describe` (the pattern table's laser column) |
 | `RepositoryTest` | every protocol and package file parses; no file calls a removed per-protocol helper; `RepeatOnError` is gone; the config path |
 
 `fakeTrial` and `fakeSession` build made-up trial data for the tests.

@@ -12,22 +12,7 @@ function setpoint_mW = irradianceToSetpoint_mW(irradiance_mWmm2, luminose)
 %   making the irradiance the one in the measured spot.
 %   Errors if any value lies outside the calibrated range.
 
-    % V-7002 DMD is 1024x768; calibrate_power.m uses info.height/info.width
-    DMD_ASPECT = 768 / 1024;
-
-    calCsvPath = fullfile(char(luminose.f.luminose_hf), 'dmd', 'power_calibration.csv');
-    T = readtable(calCsvPath);
-    T = T(T.power_at_sample_mW > 0, :);
-
-    areaAtSample_mm2 = luminose.dmd.projectedDMDlength^2 * DMD_ASPECT;
-    spotGain = 1;
-    try  % luminose is a LuminoseConstants object (isfield is false on objects) or a struct
-        if isfield(luminose.laser, 'spotGain') && ~isempty(luminose.laser.spotGain)
-            spotGain = luminose.laser.spotGain;
-        end
-    catch
-    end
-    calIrradiance = T.power_at_sample_mW / areaAtSample_mm2 * spotGain;
+    [calIrradiance, calSetpoint] = irradianceCalibration(luminose);
 
     lo = min(calIrradiance);
     hi = max(calIrradiance);
@@ -38,5 +23,5 @@ function setpoint_mW = irradianceToSetpoint_mW(irradiance_mWmm2, luminose)
             mat2str(irradiance_mWmm2(outOfRange)), lo, hi);
     end
 
-    setpoint_mW = interp1(calIrradiance, T.power_setting_mW, irradiance_mWmm2, 'linear');
+    setpoint_mW = interp1(calIrradiance, calSetpoint, irradiance_mWmm2, 'linear');
 end

@@ -357,11 +357,22 @@ function varargout = LuminoseParameterGUI_hf_powercal(varargin)
                                 vNFrames  = Params.(nFParam);
                                 vExposure = Params.(expParam);
                                 nOpts = numel(vProbs);
-                                tableData = cell(nOpts, 3);
+                                % Types with laser options also show each row's laser power (set in the designer)
+                                hasLaser = isfield(Meta.(ThisParamName), 'LaserOptions') && Meta.(ThisParamName).LaserOptions;
+                                tableData = cell(nOpts, 3 + hasLaser);
                                 for iOpt = 1:nOpts
                                     tableData{iOpt,1} = vProbs(iOpt);
                                     tableData{iOpt,2} = getDesignSpotCount(BpodSystem, typeName, iOpt);
-                                    tableData{iOpt,3} = vExposure(iOpt);
+                                    tableData{iOpt,3} = vExposure(iOpt) / 1000;  % shown in ms, stored in us
+                                    if hasLaser, tableData{iOpt,4} = PatternLaserText(BpodSystem, typeName, iOpt, Meta); end
+                                end
+                                colNames = {'Prob', 'Spots', 'Exposure (ms)'};
+                                colWidths = {55, 65, 105};
+                                colFormats = {'numeric', 'numeric', 'numeric'};
+                                if hasLaser
+                                    colNames{4} = 'Laser mW/mm2 (prob)';
+                                    colWidths = {42, 42, 85, 185};
+                                    colFormats{4} = 'char';
                                 end
                                 selectorHeight = 195;
                                 selectorPanel = uipanel(htab, 'Units', 'pixels', ...
@@ -370,9 +381,9 @@ function varargout = LuminoseParameterGUI_hf_powercal(varargin)
                                 hRowEdit = uicontrol(selectorPanel, 'Style', 'edit', 'String', '1', ...
                                     'Position', [253 16 35 26], 'FontSize', 11, 'BackgroundColor', COLORS.inputBg, 'ForegroundColor', COLORS.textDark);
                                 ptable = uitable(selectorPanel, 'Data', tableData, ...
-                                    'ColumnName', {'Prob', 'Spots', 'Exposure (us)'}, ...
-                                    'ColumnWidth', {55, 65, 105}, 'ColumnEditable', [true false true], ...
-                                    'ColumnFormat', {'numeric','numeric','numeric'}, ...
+                                    'ColumnName', colNames, ...
+                                    'ColumnWidth', colWidths, 'ColumnEditable', [true false false false(1, hasLaser)], ...
+                                    'ColumnFormat', colFormats, ...
                                     'Position', [5 60 385 120], 'FontSize', 10, ...
                                     'CellEditCallback', @(src,ev) PatternTableCellEdited(src, ev, 'powercal'), ...
                                     'CellSelectionCallback', @(src,ev) PatternTableSelectionChanged(src, ev, hRowEdit));
@@ -538,7 +549,7 @@ function varargout = LuminoseParameterGUI_hf_powercal(varargin)
                         for iR = 1:nRows
                             pVal = tableData{iR,1}; if isempty(pVal)||isnan(pVal), pVal=0; end
                             probsVec(iR) = pVal;
-                            exposureVec(iR) = tableData{iR,3};
+                            exposureVec(iR) = tableData{iR,3} * 1000;  % ms in the table, us in S.GUI
                         end
                         GUIParam = 0;
                         Params.GUI.(sd.ProbParam)     = probsVec;
@@ -674,6 +685,15 @@ function normalizeOdourProbs(htable)
     set(htable, 'Data', data);
 end
 
+function text = PatternLaserText(BpodSystem, typeName, rowIdx, Meta)
+% The row's laser power for the pattern table (lhf.laser.describe)
+    global luminose
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
+    design = lhf.patternDesign(designs, luminose.dmd, typeName, rowIdx);
+    text = lhf.laser.describe(design, typeName, struct('GUIMeta', Meta));
+end
+
 function n = getDesignSpotCount(BpodSystem, typeName, rowIdx)
     n = 0;
     try
@@ -701,7 +721,9 @@ end
 function PatternAddRow(ptable, suffix)
     data = get(ptable, 'Data');
     nRows = size(data,1) + 1;
-    data(end+1,:) = {0, 1, 1e6};
+    newRow = {0, 1, 1000};
+    if size(data, 2) > 3, newRow{4} = 'none'; end  % laser column: set when the row is designed
+    data(end+1,:) = newRow;
     for i = 1:nRows, data{i,1} = round(1/nRows, 4); end
     set(ptable, 'Data', data);
     sd = get(ptable, 'UserData'); sd.ActiveRow = nRows; set(ptable, 'UserData', sd);

@@ -1,6 +1,6 @@
 classdef LaserTest < matlab.unittest.TestCase
-% Per-pattern laser power (lhf.laser.options, lhf.laser.draw) without a
-% laser or Bpod: the connected path needs the rig.
+% Per-pattern laser power (lhf.laser.options, lhf.laser.draw, lhf.laser.describe)
+% without a laser or Bpod: the connected path needs the rig.
 
     properties
         S
@@ -53,6 +53,17 @@ classdef LaserTest < matlab.unittest.TestCase
             [irr, setpoint, action] = lhf.laser.draw(design, 'CSminus', tc.S, struct());
             tc.verifyTrue(isnan(irr) && isnan(setpoint));
             tc.verifyEmpty(action);
+        end
+
+        function theTableShowsEachIrradianceWithItsProbability(tc)
+            design.laserIrradiances_mWmm2 = [4 6];
+            design.laserWeights = [3 1];
+            tc.verifyEqual(lhf.laser.describe(design, 'CSminus', tc.S), '4 (0.75), 6 (0.25)');
+            tc.verifyEqual(lhf.laser.describe(struct('spots', 1), 'CSminus', tc.S), '2, 5, 8 (equal)');  % the defaults
+            design.laserIrradiances_mWmm2 = 3.5; design.laserWeights = 1;
+            tc.verifyEqual(lhf.laser.describe(design, 'CSminus', tc.S), '3.5');
+            tc.verifyEqual(lhf.laser.describe([], 'CSminus', tc.S), 'none');           % no design or a blank
+            tc.verifyEqual(lhf.laser.describe(struct('spots', 1), 'cue', tc.S), 'none'); % no laser options
         end
 
         function noDesignDrawsNothing(tc)

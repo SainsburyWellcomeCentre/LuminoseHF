@@ -29,7 +29,7 @@ function dmd_hf_sleep(code)
         key12 = rowIdx;
         if ~isequaln(optoKey, key12) || isempty(optoSeq)
             design = loadDesign(BpodSystem, 'opto', rowIdx, luminose.dmd.patternsFolder);
-            if isempty(design)
+            if isempty(design) || isempty(design.spots)  % none, or a blank
                 fprintf('dmd_hf_sleep: no opto pattern found for row %d\n', rowIdx); return;
             end
             H = double(dmd.device.height); W = double(dmd.device.width);
@@ -77,7 +77,7 @@ function dmd_hf_sleep(code)
     dmd.halt();
 
     design = loadDesign(BpodSystem, typeName, rowIdx, luminose.dmd.patternsFolder);
-    if isempty(design)
+    if isempty(design) || isempty(design.spots)  % none, or a blank
         fprintf('dmd_hf_sleep: no design for %s row %d\n', typeName, rowIdx); return;
     end
     spots = design.spots; r_px = design.r_px; tickMs = design.tickMs;
