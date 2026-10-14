@@ -7,10 +7,23 @@ function RunSniffCalibration(~)
 %
 %   Called via GUIMeta.CalibrateSniff.Callback from any luminose protocol.
 
-    global BpodSystem
+    global BpodSystem %#ok<GVMIS> Bpod's
 
-    %% Read current GUI state
-    latestParams = BpodSystem.GUIData.ParameterGUI.LatestGUIParams;
+    % Not during a session (its trial manager owns the state machine), and one at a time:
+    % a second press would start a trial while the first still runs
+    gui = [];
+    try gui = BpodSystem.ProtocolFigures.ParameterGUI; catch, end
+    if ~isempty(gui) && isgraphics(gui)
+        if isappdata(gui, 'StartPressed') && getappdata(gui, 'StartPressed')
+            warndlg('A session is running: calibrate the sniff sensor before START.', 'Sniff Calibration');
+            return
+        end
+        if isappdata(gui, 'SniffCalibrating') && getappdata(gui, 'SniffCalibrating')
+            return  % already running
+        end
+        setappdata(gui, 'SniffCalibrating', true);
+        running = onCleanup(@() clearFlag(gui));  % however it ends
+    end
 
     risingEdge = false;  % an inhalation drops the signal (SniffDetector)
 
@@ -47,3 +60,13 @@ function RunSniffCalibration(~)
 
     msgbox(sprintf('Calibration complete.\nOnset: %.2f V    Offset: %.2f V', onsetV, offsetV), ...
         'Sniff Calibration', 'help');
+
+end
+
+
+function clearFlag(gui)
+% The calibration ended (or failed): it may run again.
+    if isgraphics(gui)
+        setappdata(gui, 'SniffCalibrating', false);
+    end
+end

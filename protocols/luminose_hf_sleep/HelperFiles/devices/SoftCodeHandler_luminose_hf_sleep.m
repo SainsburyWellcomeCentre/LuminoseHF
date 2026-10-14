@@ -1,4 +1,5 @@
+%% Softcode Handler
 function SoftCodeHandler_luminose_hf_sleep(code)
     if code == 0, return; end
-    parfeval(@dmd_hf_sleep, 0, code);
+    dmd_hf_sleep(code);  % synchronous: the sequence was prepared before the trial; libisloaded fails on thread workers
 end

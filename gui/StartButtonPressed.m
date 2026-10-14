@@ -1,9 +1,11 @@
 function StartButtonPressed(lockedParams)
     % StartButtonPressed  Handles disabling GUI elements and updating button status
-    global BpodSystem
+    global BpodSystem %#ok<GVMIS> Bpod's
 
     % Signal that start was pressed
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', true);
+    lhf.lockDevicePanels(true);  % the session drives the laser and DMD: their panels view only
+    lhf.cam.useSubjectFolder();  % camera images into <data>/<subject>/luminose_hf_widefield
 
     % Disable each locked parameter's GUI control
     paramNames = BpodSystem.GUIData.ParameterGUI.ParamNames;

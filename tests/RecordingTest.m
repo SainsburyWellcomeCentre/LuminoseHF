@@ -90,22 +90,27 @@ classdef RecordingTest < matlab.unittest.TestCase
             tc.verifyEmpty(c.power.newestRun);
         end
 
-        function theStagePositionIsReadThenReleased(tc)
+        function theStagePositionLeavesTheStagesAsTheyWere(tc)
             [stages, transport] = tc.simulatedStages([1000 2000 3000]);
             [um, note] = lhf.stagePosition(tc.luminose, @() stages);
             tc.verifyEqual(um, [1000 2000 3000]);
             tc.verifyEmpty(note);
-            tc.verifyFalse(transport.isOpen());   % released
+            tc.verifyTrue(transport.isOpen());   % connected before: still connected
+            stages.close();
+            um = lhf.stagePosition(tc.luminose, @() stages);
+            tc.verifyEqual(um, [1000 2000 3000]);
+            tc.verifyFalse(transport.isOpen());   % disconnected before: connected, read, closed
             [um, note] = lhf.stagePosition(tc.luminose, @() failing('no port'));
             tc.verifyEmpty(um);
             tc.verifySubstring(note, 'no port');
         end
 
-        function theDesignersStagesAreUsedWhenItHasThem(tc)
-            published = tc.simulatedStages([10 20 30]);
-            setappdata(0, 'lhfStages', published);
-            tc.addTeardown(@() rmappdata(0, 'lhfStages'));
-            um = lhf.stagePosition(tc.luminose, @() failing('must not open the port'));
+        function theRigsSharedStagesAreRead(tc)
+            shared = tc.simulatedStages([10 20 30]);
+            saved = getappdata(0, 'lhfDevices');
+            tc.addTeardown(@() setappdata(0, 'lhfDevices', saved));
+            lhf.device('stage', shared);   % the Stage panel's and the designer's
+            um = lhf.stagePosition(tc.luminose);
             tc.verifyEqual(um, [10 20 30]);
         end
 
@@ -123,6 +128,21 @@ classdef RecordingTest < matlab.unittest.TestCase
             tc.verifyEqual(setup.fiducial.entry.stageUm, [5 6 7]);
             tc.verifyFalse(isfield(setup.fiducial.entry, 'frame'));
             tc.verifyMatches(setup.fiducial.entry.code.commit, '^[0-9a-f]{40}$');  % saveFiducial records the code
+        end
+
+        function theSetupNamesTheSubjectsTargets(tc)
+            lhf.cam.saveTargets(lhf.cam.targetsFile(tc.calibration, 'M1'), ...
+                struct('name', {'G1', 'G2'}, 'xy', {[1 2], [3 4]}), ...
+                struct('referenceTime', '2026-10-01 10:00:00'));
+            stages = tc.simulatedStages([1 2 3]);
+            setup = lhf.recordSetup(tc.luminose, 'M1', struct('calibrationFolder', tc.calibration, ...
+                'makeStages', @() stages, 'repos', {{}}));
+            tc.verifyEqual(setup.targets.n, 2);
+            tc.verifyEqual(setup.targets.names, {'G1', 'G2'});
+            tc.verifyEqual(setup.targets.referenceTime, '2026-10-01 10:00:00');
+            setup = lhf.recordSetup(tc.luminose, 'M2', struct('calibrationFolder', tc.calibration, ...
+                'makeStages', @() stages, 'repos', {{}}));
+            tc.verifyEmpty(setup.targets);
         end
 
         function aDataFileOutsideTheDataFolderIsFlagged(tc)

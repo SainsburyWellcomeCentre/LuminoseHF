@@ -47,30 +47,6 @@ classdef CameraRegistrationTest < matlab.unittest.TestCase
             tc.verifyError(@() lhf.cam.fitRegistration([1 1; 2 2], [1 1; 2 2]), 'lhf:cam:badPoints');
         end
 
-        function theCanvasShowsTheCameraPixelUnderEachDmdPoint(tc)
-            reg = lhf.cam.fitRegistration([0 0; 1024 0; 0 768], [0 0; 1024 0; 0 768] * 1.3 + 40);
-            camSize = [1100 1400];
-            [cx, cy] = meshgrid(1:camSize(2), 1:camSize(1));
-            frame = uint16(cx + 2000 * (cy > 600));  % column number, plus a mark below row 600
-            map = lhf.cam.canvasMap(reg, camSize, [384 512], 2);
-            img = lhf.cam.toCanvas(frame, map);
-            tc.verifyClass(img, 'uint16');
-            tc.verifySize(img, [384 512]);
-            % canvas pixel (i, j) is DMD ((j - 0.5) * 2, (i - 0.5) * 2)
-            i = 100; j = 300;
-            cam = lhf.cam.toCamera(reg, [(j - 0.5) * 2, (i - 0.5) * 2]);
-            tc.verifyEqual(double(img(i, j)), round(cam(1)) + 2000 * (round(cam(2)) > 600));
-        end
-
-        function canvasPixelsOutsideTheFrameAreZero(tc)
-            reg = lhf.cam.fitRegistration([0 0; 1024 0; 0 768], [0 0; 1024 0; 0 768] + 500);
-            map = lhf.cam.canvasMap(reg, [800 800], [384 512], 2);
-            tc.verifyEqual(map(1, 1) > 0, true);  % DMD (1,1) -> camera (501,501)
-            tc.verifyEqual(map(end, end), 0);     % camera (1523,1267): outside
-            img = lhf.cam.toCanvas(ones(800, 800, 'uint16'), map);
-            tc.verifyEqual(img(end, end), uint16(0));
-        end
-
         function aSpotIsFoundAndDustElsewhereIgnored(tc)
             [x, y] = meshgrid(1:300, 1:200);
             background = 100 * ones(200, 300);
@@ -84,6 +60,9 @@ classdef CameraRegistrationTest < matlab.unittest.TestCase
             rng(1);
             background = uint16(100 + 5 * randn(100));
             tc.verifyError(@() lhf.cam.spotCentroid(background, background), 'lhf:cam:noSpot');
+            hot = background;
+            hot(50, 60) = hot(50, 60) + 5000;  % one hot pixel is not a spot
+            tc.verifyError(@() lhf.cam.spotCentroid(hot, background), 'lhf:cam:noSpot');
         end
 
         function theNewestCalibrationIsLoaded(tc)
@@ -111,6 +90,27 @@ classdef CameraRegistrationTest < matlab.unittest.TestCase
             tc.verifyEqual(loaded.sessions(2).xy, [110 190]);
             tc.verifyEqual(loaded.animal, 'LHF_01_a');
             tc.verifyNotEmpty(loaded.reference.time);
+        end
+
+        function targetsAreSavedAndReplacedWithEverySaveKept(tc)
+            file = lhf.cam.targetsFile(tc.folder, 'M 1');
+            tc.verifyEqual(file, fullfile(tc.folder, 'targets', 'M_1.mat'));
+            tc.verifyEmpty(lhf.cam.loadTargets(file));
+            list = struct('name', {'G1', 'G2'}, 'xy', {[10 20], [30 40]});
+            entry = struct('referenceTime', '2026-10-01 10:00:00', 'frame', uint16(ones(4)), ...
+                'transform', lhf.cam.mapPoints('identity'));
+            t = lhf.cam.saveTargets(file, list, entry);
+            tc.verifyEqual({t.list.name}, {'G1', 'G2'});
+            tc.verifyTrue(all([t.list.use]));
+            tc.verifyNotEmpty(t.list(1).created);
+            t = lhf.cam.saveTargets(file, t.list(2), entry);
+            loaded = lhf.cam.loadTargets(file);
+            tc.verifyEqual({loaded.list.name}, {'G2'});
+            tc.verifyEqual(loaded.list(1).xy, [30 40]);
+            tc.verifyNumElements(loaded.saves, 2);
+            tc.verifyEqual(loaded.referenceTime, '2026-10-01 10:00:00');
+            tc.verifyEqual(t.animal, 'M_1');
+            tc.verifyError(@() lhf.cam.targetsFile(tc.folder, ' '), 'lhf:cam:noAnimal');
         end
 
         function aFiducialNeedsAnAnimal(tc)

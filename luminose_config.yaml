@@ -58,13 +58,13 @@ dmd:
   testImagePath: "C:\\Users\\harrislab\\Documents\\DLPimages\\bullseye1920x1080_inv.bmp"
   # projected width of the full 1024-DMD-px field at the sample plane (mm)
   # derived 20260825 from checkerboard_20260825_195006.mat
-  # (calibrate_xy_checkerboard.m) averaged camera-px-per-DMD-px across the
+  # (calibrate_xy_checkerboard.m, retired 2026-10-06) averaged camera-px-per-DMD-px across the
   # grid-row (1.3657) and grid-col (1.3642) directions — anisotropy 1.001x,
   # so effectively isotropic -> 1.3649 px/DMD-px, combined with the
   # unchanged camera.effectivePixelSize_um (1.5773 um/px, camera imaging
   # path — unaffected by DMD projection magnification) ->
   # 1.5773 um/px * 1.3649 px/DMD-px * 1024 DMD-px = 2.2046mm
-  # (replaces 2.1041mm, derived 20260824 via calibrate_xy_white.m bounding-box
+  # (replaces 2.1041mm, derived 20260824 via calibrate_xy_white.m (retired 2026-10-06) bounding-box
   # method — the two methods disagree by ~4.8%; worth rechecking if it recurs)
   projectedDMDlength: 2.2046
   spotSide: 0.1
@@ -99,8 +99,9 @@ zaber:
   port: "COM14"
   zRange_um: [-500, 500]
   zStep_um: 50
-  # The three axes on the port (X is axis 1, Y 2, Z 3): Z for calibrate_z
-  # (calibration/rigStage.m), all three for automatic alignment to an animal's reference
+  focus_um: 19000      # Z where the DMD is about in focus: the Z focus calibration scans around it
+  # The three axes on the port (X is axis 1, Y 2, Z 3): Z for the Z focus calibration
+  # (lhf.cal.zFocus), all three for automatic alignment to an animal's reference
   # (Pattern Designer, Align to reference; calibration/rigStages.m). Without x, y and z,
   # alignment is off. reversed: true counts an axis the other way in MATLAB only
   # (zaberstage.Stage 'Reversed'; Zaber Launcher and the controller are unchanged).

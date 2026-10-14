@@ -11,7 +11,7 @@ function encoder(ax, action, choiceThreshold, varargin)
     switch action
         case 'init'
             cla(ax);
-            st.trace = plot(ax, 0, 0, 'k-', 'LineWidth', 2);
+            st.trace = plot(ax, 0, 0, '-', 'Color', [0 0.45 0.74], 'LineWidth', 2);  % blue
             st.thresholds = gobjects(0);
             if choiceThreshold ~= 0
                 st.thresholds(1) = line(ax, [0 1000], -[1 1] * choiceThreshold, 'Color', 'k', 'LineStyle', ':');

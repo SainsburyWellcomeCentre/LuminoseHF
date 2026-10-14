@@ -4,7 +4,7 @@ function options = rigAxisOptions(axes, name)
 %   options = rigAxisOptions(luminose.zaber.axes, 'x')
 %
 %   Name-value pairs DeviceAddress, AxisNumber, Reversed and SafeLimitsUm (its safe_um),
-%   for rigStage and rigStages. Errors if the axis is missing or has no safe_um: no axis
+%   for lhf.device('stage') and rigStages. Errors if the axis is missing or has no safe_um: no axis
 %   moves without its safe range.
     if ~isfield(axes, name)
         error('rigAxisOptions:noAxis', ['zaber.axes in luminose_config.yaml has no %s axis ' ...

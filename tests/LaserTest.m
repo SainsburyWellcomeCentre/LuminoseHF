@@ -99,12 +99,12 @@ classdef LaserTest < matlab.unittest.TestCase
         end
 
         function closeKeepsTheRecordAndTurnsEmissionOff(tc)
-            [~, transport] = tc.fakeSessionLaser();
+            [laser, transport] = tc.fakeSessionLaser();
             global BpodSystem %#ok<GVMIS>
             tc.verifyTrue(lhf.laser.isOn());
             lhf.laser.close();
             tc.verifyFalse(transport.Enabled);
-            tc.verifyFalse(transport.isOpen());
+            tc.verifyEqual(laser.State, 'Ready');   % the rig's one laser: its panel's to disconnect
             tc.verifyFalse(isfield(BpodSystem.PluginObjects, 'Laser'));
             tc.verifyEqual(BpodSystem.Data.Laser.Package, 'obis');
             tc.verifyEqual(BpodSystem.Data.Laser.Mode, 'Digital');
@@ -138,6 +138,34 @@ classdef LaserTest < matlab.unittest.TestCase
             luminose.laser.spotGain = 2;
             irrSpot = irradianceCalibration(luminose);
             tc.verifyEqual(irrSpot, 2 * irrFull, 'RelTol', 1e-12);
+        end
+
+        function thePowerTagNamesThePowerAtTheSample(tc)
+            laser = obis.Laser('Transport', obis.transport.SimulatedTransport(), 'MaxPowermW', 165);
+            tc.addTeardown(@() delete(laser));
+            cal = obis.Calibration([0 10 20], [0 3.4 6.8]);
+            tc.verifyEqual(lhf.laser.powerTag(laser, cal, []), '');  % not connected
+            laser.connect();
+            laser.setPower(10);
+            tc.verifyEqual(lhf.laser.powerTag(laser, cal, []), 'laserOff');
+            laser.setEnabled(true);
+            tc.verifyEqual(lhf.laser.powerTag(laser, cal, []), 'sample3.4mW');
+            tc.verifyEqual(lhf.laser.powerTag(laser, [], []), 'setpoint10mW');
+            laser.setPower(30);  % beyond the calibration
+            tc.verifyEqual(lhf.laser.powerTag(laser, cal, []), 'setpoint30mW');
+            laser.setPower(10);
+            laser.setEnabled(false);
+            pulser = obis.Pulser(laser, 'FrequencyHz', 5, 'DutyPercent', 20);
+            pulser.start();
+            tc.addTeardown(@() delete(pulser));
+            tc.verifyEqual(lhf.laser.powerTag(laser, cal, pulser), 'sample3.4mW_5Hz20pct');
+            pulser.stop();
+        end
+
+        function theRigCalibrationReads(tc)
+            cal = lhf.laser.sampleCalibration(tc.rigConstants());
+            tc.verifyClass(cal, 'obis.Calibration');
+            tc.verifyEmpty(lhf.laser.sampleCalibration(struct('f', struct('luminose_hf', tempname))));
         end
     end
 

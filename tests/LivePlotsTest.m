@@ -51,6 +51,38 @@ classdef LivePlotsTest < matlab.unittest.TestCase
             tc.verifyEqual(tc.ax.Outcome.UserData.x.noresp, 1);
         end
 
+        function dprimeIsZeroAtChanceAndGrowsWithHits(tc)
+            tc.verifyEqual(lhf.dprime(5, 10, 5, 10), 0, 'AbsTol', 1e-12);
+            % log-linear rates: 10.5/11 hits, 0.5/11 false alarms
+            expected = -sqrt(2) * erfcinv(2 * 10.5 / 11) + sqrt(2) * erfcinv(2 * 0.5 / 11);
+            tc.verifyEqual(lhf.dprime(10, 10, 0, 10), expected, 'AbsTol', 1e-12);
+            tc.verifyTrue(isfinite(lhf.dprime(10, 10, 0, 10)));
+            tc.verifyLessThan(lhf.dprime(2, 10, 8, 10), 0);
+        end
+
+        function dprimeReadsHitsAndFalseAlarms(tc)
+            C = lhf.Outcome.Correct; I = lhf.Outcome.Incorrect;
+            [window, axs] = lhf.plot.createFigure('Visible', 'off', 'WithDprime', true);
+            tc.addTeardown(@() delete(window));
+            lhf.plot.dprime(axs.Dprime, 'init');
+            data = fakeSession([1 1 1 1], [C C I C]);   % Go only: no d' yet
+            lhf.plot.dprime(axs.Dprime, 'update', data);
+            tc.verifyTrue(all(isnan(axs.Dprime.UserData.moving)));
+            tc.verifySubstring(axs.Dprime.Title.String, 'needs Go and No-Go');
+            data = fakeSession([1 1 1 1 2 2 2], [C C I C C I C]);   % 3/4 hits, 1/3 FA
+            lhf.plot.dprime(axs.Dprime, 'update', data);
+            tc.verifyEqual(axs.Dprime.UserData.moving(end), lhf.dprime(3, 4, 1, 3), 'AbsTol', 1e-12);
+            tc.verifySubstring(axs.Dprime.Title.String, 'hits 3/4, false alarms 1/3');
+        end
+
+        function theWindowCanHoldDprimeAndPower(tc)
+            [window, axs] = lhf.plot.createFigure('Visible', 'off', 'WithDprime', true, ...
+                'WithPower', true);
+            tc.addTeardown(@() delete(window));
+            tc.verifyClass(axs.Dprime, 'matlab.graphics.axis.Axes');
+            tc.verifyClass(axs.Power, 'matlab.graphics.axis.Axes');
+        end
+
         function accuracyReadsTheStoredOutcomes(tc)
             C = lhf.Outcome.Correct; I = lhf.Outcome.Incorrect;
             data = fakeSession([1 1 2 2], [C I C C]);

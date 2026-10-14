@@ -4,12 +4,14 @@ classdef FakeDmd < handle
     properties
         Calls = {}        % command names, in order
         LastFrame = []    % the last frame given to displayFrame
+        OnDisplay = []    % () called after each displayFrame (tests: press Stop then)
     end
 
     methods
         function displayFrame(obj, image, varargin)
             obj.Calls{end + 1} = 'displayFrame';
             obj.LastFrame = image;
+            if ~isempty(obj.OnDisplay), obj.OnDisplay(); end
         end
 
         function halt(obj)

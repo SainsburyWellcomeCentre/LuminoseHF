@@ -130,7 +130,7 @@ end
 %  Connect to DMD
 %% -------------------------------------------------------------------------
 fprintf('Connecting to DMD...\n');
-dmd = DMDController.DMD();
+dmd = lhf.device('dmd');  % the DMD panel's too
 try
     dmd.connect();
 catch ME

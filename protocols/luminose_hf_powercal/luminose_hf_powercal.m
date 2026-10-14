@@ -36,6 +36,7 @@ function luminose_hf_powercal
     designs = struct();
     if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
     S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'cue', 'CSplus', 'CSminus', 'opto'});
+    lhf.bpod.stopStrayTrialTimers();  % a trial manager left polling by a stopped session
     LuminoseParameterGUI_hf_powercal('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -89,9 +90,10 @@ function luminose_hf_powercal
 
     %% Begin plotting
     % All live plots share one window: one graphics canvas instead of five
-    [BpodSystem.ProtocolFigures.LivePlots, plotAxes] = lhf.plot.createFigure('WithPower', true);
+    [BpodSystem.ProtocolFigures.LivePlots, plotAxes] = lhf.plot.createFigure('WithDprime', true, 'WithPower', true);
     lhf.plot.outcome(plotAxes.Outcome, 'init', info, currentTrialType);
     lhf.plot.accuracy(plotAxes.Accuracy, 'init', info);
+    lhf.plot.dprime(plotAxes.Dprime, 'init');
     lhf.plot.reward(plotAxes.Reward, 'init');
     lhf.plot.responseTime(plotAxes.Response, 'init');
     lhf.plot.encoder(plotAxes.Encoder, 'init', 0);
@@ -111,7 +113,7 @@ function luminose_hf_powercal
     sniffDetector = SniffDetector(chanSniff, 500);
     sniffDetector.configure(S.GUI.SniffOnsetThreshold, S.GUI.SniffOffsetThreshold);
 
-    BpodSystem.startAnalogViewer;
+    lhf.bpod.startFlexViewer();  % a fresh trace buffer (not a reused, broken one)
     flexioPos = get(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position');
     flexioPos(1:2) = [30, 65];
     set(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position', flexioPos);
@@ -192,6 +194,7 @@ function luminose_hf_powercal
             end
 
             RawEvents = trialManager.getTrialData;
+            lhf.bpod.repairFlexViewer();  % Bpod's viewer overflows after a long busy stretch
             dmd_hf_powercal('advance');
             BpodSystem.PluginObjects.SelectedOdourRow = BpodSystem.PluginObjects.NextOdourRow;  % odour rows of the trial now starting
             if handle_pause_condition(H, R), BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial); break; end
@@ -241,6 +244,7 @@ function luminose_hf_powercal
 
                 t4 = tic;
                 lhf.plot.accuracy(plotAxes.Accuracy, 'update', BpodSystem.Data);
+                lhf.plot.dprime(plotAxes.Dprime, 'update', BpodSystem.Data);
                 disp(['Updated accuracy plot: ', num2str(toc(t4))]);
 
                 t5 = tic;
@@ -410,7 +414,7 @@ function [sma, S, actions] = PrepareStateMachine(S, currentTrialType, currentTri
     responseDetect = {};
     switch response
         case 'Lick'
-            responseDetect = {'Port3In', goAction, 'Tup', noGoAction};
+            responseDetect = {'BNC1High', goAction, 'Tup', noGoAction};  % lick sensor on BNC in 1
             chooseState1 = chooseState2;
         case 'Rotary Encoder'
             responseDetect = {'RotaryEncoder1_1', goAction, 'RotaryEncoder1_2', noGoAction};
@@ -521,6 +525,9 @@ end
 
 function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
+    lhf.bpod.stopStrayTrialTimers();  % stopped mid-trial: its polling timer would stay
+    lhf.bpod.flexRepairTimer('stop');
+    lhf.lockDevicePanels(false);  % the Laser and DMD panels usable again
     dmd_hf_powercal('close');
     clear dmd_hf_powercal;
     lhf.laser.close();  % emission off, port freed (nothing to do with Laser control off)

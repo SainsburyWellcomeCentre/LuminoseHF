@@ -40,6 +40,7 @@ function luminose_hf_sleep
     designs = struct();
     if isfield(BpodSystem.PluginObjects, 'PatternDesigns'), designs = BpodSystem.PluginObjects.PatternDesigns; end
     S.GUI = lhf.patternTiming(S.GUI, designs, luminose.dmd, {'opto'});
+    lhf.bpod.stopStrayTrialTimers();  % a trial manager left polling by a stopped session
     LuminoseParameterGUI_hf_sleep('init', S);
     disp('Waiting for START button...');
     setappdata(BpodSystem.ProtocolFigures.ParameterGUI, 'StartPressed', false);
@@ -113,7 +114,7 @@ function luminose_hf_sleep
     sniffDetector = SniffDetector(chanSniff, 500);
     sniffDetector.configure(S.GUI.SniffOnsetThreshold, S.GUI.SniffOffsetThreshold);
 
-    BpodSystem.startAnalogViewer;
+    lhf.bpod.startFlexViewer();  % a fresh trace buffer (not a reused, broken one)
     flexioPos = get(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position');
     flexioPos(1:2) = [30, 65];
     set(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position', flexioPos);
@@ -138,6 +139,9 @@ function luminose_hf_sleep
     trialManager = BpodTrialManager;
     sessionStartTic = tic;
     [sma, ~, currentActions] = PrepareStateMachine(S, trialTypes, 1, stimTime, ITI, sessionStartTic);
+    dmd_hf_sleep('prepare', dmdSoftCodes(sma));
+    currentActions.Patterns = BpodSystem.PluginObjects.PreparedPatterns;  % what the DMD will show
+    dmd_hf_sleep('advance');
     sessionStart = datestr(datetime('now'), 'yyyy-mm-dd HH:MM:SS');
     repoDir = fileparts(fileparts(fileparts(mfilename('fullpath'))));
     [~, gitHash] = system(['git -C "' repoDir '" rev-parse HEAD']);
@@ -158,11 +162,15 @@ function luminose_hf_sleep
 
             if currentTrial < S.GUI.maxTrials
                 [sma, S, nextActions] = PrepareStateMachine(S, trialTypes, currentTrial+1, stimTime, ITI, sessionStartTic);
+                dmd_hf_sleep('prepare', dmdSoftCodes(sma));
+                nextActions.Patterns = BpodSystem.PluginObjects.PreparedPatterns;  % what the DMD will show
                 disp(['Session: ', sessionStart, ' | Trial: ', num2str(currentTrial)]);
                 SendStateMachine(sma, 'RunASAP');
             end
 
             RawEvents = trialManager.getTrialData;
+            lhf.bpod.repairFlexViewer();  % Bpod's viewer overflows after a long busy stretch
+            dmd_hf_sleep('advance');
             handle_pause_condition(R);
 
             if currentTrial < S.GUI.maxTrials
@@ -240,6 +248,7 @@ function [sma, S, actions] = PrepareStateMachine(S, trialTypes, currentTrial, st
     global BpodSystem
 
     onsetDelay = max(0, 1 - toc(sessionStartTic));
+    BpodSystem.PluginObjects.PreparingTrial = currentTrial;  % the DMD handler logs it
 
     % SelectedPatternRow for each pattern type
     for tCell = {'CSplus', 'CSminus', 'opto'}
@@ -324,8 +333,7 @@ function [sma, S, actions] = PrepareStateMachine(S, trialTypes, currentTrial, st
     actions.DeliverStim = stimAction;
     actions.ITI = {'BNC1', 1};
     actions.PatternRows = BpodSystem.PluginObjects.SelectedPatternRow;  % row drawn per type
-    % The opto design of the drawn row (the DMD runs through parfeval here)
-    actions.Patterns = struct('opto', lhf.selectedDesign('opto'));
+    % actions.Patterns is set by the caller: what dmd_hf_sleep('prepare') prepared
 end
 
 %% Handle pause condition
@@ -341,6 +349,11 @@ end
 %% Cleanup
 function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
+    lhf.bpod.stopStrayTrialTimers();  % stopped mid-trial: its polling timer would stay
+    lhf.bpod.flexRepairTimer('stop');
+    lhf.lockDevicePanels(false);  % the Laser and DMD panels usable again
+    dmd_hf_sleep('close');  % halts the DMD and frees its sequences; the DMD stays connected (shared)
+    clear dmd_hf_sleep;
     BpodSystem.Data.luminose = luminose;
     BpodSystem.Data.GUIMeta = S.GUIMeta;
     BpodSystem.ProtocolSettings = S;

@@ -55,6 +55,27 @@ classdef StageAlignmentTest < matlab.unittest.TestCase
             tc.verifyEqual(same.similarity, 1, 'AbsTol', 1e-3);
         end
 
+        function pointsOfTheReferenceAreFoundInAMovedFrame(tc)
+            % lhf.cam.mapPoints with register's result: a point of the sample lands where
+            % render puts it (centre + R(rotation) (p - centre) + shift).
+            reference = tc.frame();
+            tc.rotation = 0.8;
+            shift = [12.4 -7.6];
+            moved = tc.shifted(shift);
+            r = lhf.cam.register(reference, moved, 'Downsample', 2);
+            T = lhf.cam.mapPoints(r, [tc.FRAME tc.FRAME]);
+            refPoints = [100 80; 300 250; 192.5 192.5];
+            c = (tc.FRAME + 1) / 2;
+            R = [cosd(0.8) -sind(0.8); sind(0.8) cosd(0.8)];
+            truth = (refPoints - c) * R' + c + shift;
+            tc.verifyEqual(lhf.cam.mapPoints(refPoints, T, 'toFrame'), truth, 'AbsTol', 1.5);
+            back = lhf.cam.mapPoints(lhf.cam.mapPoints(refPoints, T, 'toFrame'), T, 'toReference');
+            tc.verifyEqual(back, refPoints, 'AbsTol', 1e-9);
+            I = lhf.cam.mapPoints('identity');
+            tc.verifyEqual(lhf.cam.mapPoints(refPoints, I, 'toFrame'), refPoints);
+            tc.verifyError(@() lhf.cam.mapPoints(refPoints, I, 'sideways'), 'lhf:cam:badDirection');
+        end
+
         function aBlankFrameIsNotConfident(tc)
             rng(2);
             r = lhf.cam.register(tc.frame(), uint16(1000 + 20 * randn(tc.FRAME)));
@@ -238,6 +259,20 @@ classdef StageAlignmentTest < matlab.unittest.TestCase
             real = LuminoseConstants().zaber.axes;   % the rig's: Y and Z open at one end
             tc.verifyEqual(real.y.safe_um, [35000 Inf]);
             tc.verifyEqual(real.z.safe_um, [-Inf 30000]);
+        end
+
+        function stageDefaultsCarryTheSafeRanges(tc)
+            % The rig's axes as zaberstage.app's defaults (LuminoseConstants.stageDefaults)
+            zaber = struct('axes', struct( ...
+                'x', struct('device', 1, 'axis', 1, 'reversed', true, 'safe_um', [-Inf Inf]), ...
+                'y', struct('device', 1, 'axis', 2, 'reversed', false, 'safe_um', [35000 Inf]), ...
+                'z', struct('device', 1, 'axis', 3, 'reversed', false)));   % no safe_um
+            d = LuminoseConstants.stageDefaults(zaber);
+            tc.verifyEqual(fieldnames(d), {'X'; 'Y'});   % Z is left out: it would not connect
+            tc.verifyEqual(d.X, struct('DeviceAddress', 1, 'AxisNumber', 1, 'Reversed', true, ...
+                'SafeLimitsUm', [-Inf Inf]));
+            tc.verifyEqual(d.Y.SafeLimitsUm, [35000 Inf]);
+            tc.verifyFalse(d.Y.Reversed);
         end
     end
 

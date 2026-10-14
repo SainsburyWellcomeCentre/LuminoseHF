@@ -123,6 +123,11 @@ classdef LuminoseConstants < handle
             addpath(genpath(char(obj.f.luminose_hf)), genpath(char(obj.f.luminoseData)), genpath(char(obj.f.matlabFolder)));
             obj.packageVersions = LuminoseConstants.addDevicePackages(obj.f.matlabFolder);
             savepath();
+            % The rig's axes and safe ranges become zaberstage.app's defaults, so the stage
+            % panel opened on its own keeps them too (only from the rig's own config file)
+            if strcmp(char(configFile), char(LuminoseConstants.defaultConfigFile()))
+                LuminoseConstants.storeStageDefaults(obj.zaber);
+            end
         end
         
         function saveConfig(obj, filename)
@@ -468,9 +473,13 @@ classdef LuminoseConstants < handle
             obj.zaber = struct( ...
                 'port',      string(cfg.port), ...
                 'zRange_um', cfg.zRange_um, ...
-                'zStep_um',  cfg.zStep_um ...
+                'zStep_um',  cfg.zStep_um, ...
+                'focus_um',  19000 ...
             );
-            % Optional: the X, Y and Z axes (rigStage, rigStages), each counted the other way
+            if isfield(cfg, 'focus_um') && ~isempty(cfg.focus_um)
+                obj.zaber.focus_um = double(cfg.focus_um);  % the Z focus calibration's centre
+            end
+            % Optional: the X, Y and Z axes (lhf.device('stage'), rigStages), each counted the other way
             % if reversed (zaberstage.Stage 'Reversed') and kept within safe_um
             % (SafeLimitsUm; rigAxisOptions refuses an axis without it), and alignment's limits
             obj.zaber.axes = struct();
@@ -501,6 +510,42 @@ classdef LuminoseConstants < handle
     end
 
     methods (Static)
+        function stageAxes = stageDefaults(zaber)
+            % stageDefaults  zaber.axes as zaberstage.app's default axes: X, Y, Z, each a
+            % struct of zaberstage.Stage options (DeviceAddress, AxisNumber, Reversed,
+            % SafeLimitsUm). An axis without safe_um is left out: it does not connect.
+            stageAxes = struct();
+            for name = {'x', 'y', 'z'}
+                if isfield(zaber.axes, name{1}) && isfield(zaber.axes.(name{1}), 'safe_um')
+                    a = zaber.axes.(name{1});
+                    stageAxes.(upper(name{1})) = struct('DeviceAddress', a.device, ...
+                        'AxisNumber', a.axis, 'Reversed', logical(a.reversed), ...
+                        'SafeLimitsUm', a.safe_um);
+                end
+            end
+        end
+
+        function storeStageDefaults(zaber)
+            % storeStageDefaults  Saves stageDefaults(zaber) and the port as zaberstage's
+            % preferences when they differ; never stops the constructor.
+            try
+                stageAxes = LuminoseConstants.stageDefaults(zaber);
+                if isempty(fieldnames(stageAxes))
+                    return
+                end
+                if ~ispref('zaberstage', 'Axes') || ~isequaln(getpref('zaberstage', 'Axes'), stageAxes)
+                    setpref('zaberstage', 'Axes', stageAxes);
+                end
+                port = char(zaber.port);
+                if ~ispref('zaberstage', 'Port') || ~strcmp(getpref('zaberstage', 'Port'), port)
+                    setpref('zaberstage', 'Port', port);
+                end
+            catch err
+                warning('LuminoseConstants:stageDefaults', ...
+                    'The stage panel''s default axes were not saved: %s', err.message);
+            end
+        end
+
         function a = alignmentDefaults()
             % alignmentDefaults  Automatic alignment's limits when the config sets none (lhf.cam.align)
             a = struct('maxTravelXY_um', 1000, 'maxTravelZ_um', 200, 'maxStep_um', 500, ...

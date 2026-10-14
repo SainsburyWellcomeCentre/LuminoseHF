@@ -1,197 +1,143 @@
-function dmd_hf_sleep(code)
-% dmd_hf_sleep  DMD soft-code handler for the sleep protocol.
+function dmd_hf_sleep(code, codes)
+% dmd_hf_sleep  DMD handler for the sleep protocol.
+%
+%   dmd_hf_sleep('prepare', codes)  build the next trial's sequences for the
+%                                    soft codes it sends (PrepareStateMachine)
+%   dmd_hf_sleep('advance')         make them current (after getTrialData)
+%   dmd_hf_sleep('close')           free the sequences and the device
+%   dmd_hf_sleep(code)              soft code: show the current sequence
 %
 %   Soft-code mapping:
-%     9  - CS+ pattern (imgIdx_CSplus, exposure_CSplus, nFrames_CSplus)
-%    10  - CS- pattern (imgIdx_CSminus,exposure_CSminus,nFrames_CSminus)
+%     9  - CS+ pattern
+%    10  - CS- pattern
+%    12  - opto pattern (the test pulses at sniff onset, DeliverStim)
 %
-%   Each code builds (or reuses a cached) frame stack and displays it
-%   immediately in MASTER mode — no external hardware trigger involved.
-%   Random spots get new positions each trial; all-fixed cached.
+%   Sequences are shown in MASTER mode (immediate), as in the other protocols:
+%   the sequence is built in the prepare window on DMDPatternPlayer (the rig's
+%   shared DMD, lhf.device('dmd'), the DMD panel's too); the soft code only starts
+%   it. Before 2026-10-06 this handler ran on a parfeval worker, which has none of
+%   the session's globals and opened a DMD of its own.
+%
+%   Log: <data file>_dmd_log.txt (lhf.sessionFile), with the trial of each line.
+%   What each trial's sequences were is recorded in BpodSystem.PluginObjects.
+%   PreparedPatterns, which the protocol keeps as RawEvents.Trial{n}.Actions.Patterns.
 
-    persistent dmd plusSeq plusKey minusSeq minusKey optoSeq optoKey
+    persistent player preparedTrial runningTrial
+
     global S luminose BpodSystem
-    C = DMDController.Constants;
 
-    if isempty(dmd)
-        dmd = DMDController.DMD();
-        dmd.connect();
-        fprintf('DMD connected (sleep).\n');
-    end
+    logFile = fullfile(char(tempdir), 'dmd_hf_sleep_log.txt');
 
-    % Code 12: opto ITI pattern, MASTER mode (fires immediately)
-    if code == 12
-        rowIdx = 1;
-        if isfield(BpodSystem.PluginObjects, 'SelectedPatternRow') && ...
-           isfield(BpodSystem.PluginObjects.SelectedPatternRow, 'opto')
-            rowIdx = BpodSystem.PluginObjects.SelectedPatternRow.opto;
+    try
+        if ~ischar(code)
+            showCode(player, code, logFile, runningTrial);
+            return;
         end
-        key12 = rowIdx;
-        if ~isequaln(optoKey, key12) || isempty(optoSeq)
-            design = loadDesign(BpodSystem, 'opto', rowIdx, luminose.dmd.patternsFolder);
-            if isempty(design) || isempty(design.spots)  % none, or a blank
-                fprintf('dmd_hf_sleep: no opto pattern found for row %d\n', rowIdx); return;
-            end
-            H = double(dmd.device.height); W = double(dmd.device.width);
-            spots = design.spots; r_px = design.r_px; tickMs = design.tickMs;
-            margin = r_px + 1;
-            fixed = [spots.isFixed]; px = double([spots(fixed).x]); py = double([spots(fixed).y]);
-            for i = 1:numel(spots)
-                if ~spots(i).isFixed
-                    for attempt = 1:500
-                        xt = randi([margin, W-margin]); yt = randi([margin, H-margin]);
-                        if isempty(px) || all(max(abs(px-xt), abs(py-yt)) > 2*r_px)
-                            spots(i).x = xt; spots(i).y = yt;
-                            px(end+1) = xt; py(end+1) = yt; %#ok<AGROW>
-                            break;
-                        end
-                    end
+        switch code
+            case 'prepare'
+                % What this trial will show, for its record (Actions.Patterns)
+                BpodSystem.PluginObjects.PreparedPatterns = struct();
+                preparedTrial = NaN;
+                if isfield(BpodSystem.PluginObjects, 'PreparingTrial')
+                    preparedTrial = BpodSystem.PluginObjects.PreparingTrial;
                 end
-            end
-            frameStack = buildPatternFrameStack(spots, r_px, tickMs, H, W);
-            if ~isempty(optoSeq), delete(optoSeq); end
-            optoSeq = allocFrameStack(dmd, frameStack, illuTime);
-            optoKey = key12;
+                if isempty(codes), return; end
+                if isempty(player)
+                    player = DMDPatternPlayer();
+                    dmd_log(logFile, 'DMD connected');
+                end
+                for c = codes
+                    typeName = codeType(c);
+                    if isempty(typeName), continue; end
+                    rowIdx = selectedRow(BpodSystem, typeName);
+                    % The design lhf.stimDuration and lhf.laser.draw used for this trial
+                    [design, blankMs] = lhf.patternDesign(storedDesigns(BpodSystem), luminose.dmd, typeName, rowIdx);
+                    if isempty(design)  % none, or a blank
+                        BpodSystem.PluginObjects.PreparedPatterns.(typeName) = struct('row', rowIdx, ...
+                            'shown', false, 'blankMs', blankMs);
+                        dmd_log(logFile, 'trial %d: %s row %d has no design: nothing shown', ...
+                            preparedTrial, typeName, rowIdx);
+                        continue;
+                    end
+                    expVec = S.GUI.(sprintf('patternExposure_%s', typeName));
+                    illuTime = expVec(min(rowIdx, numel(expVec)));
+                    info = player.prepareSpots(typeName, design, illuTime);
+                    info.row = rowIdx;
+                    info.shown = true;
+                    for f = {'laserIrradiances_mWmm2', 'laserWeights'}  % the design's power list
+                        if isfield(design, f{1}), info.(f{1}) = design.(f{1}); end
+                    end
+                    BpodSystem.PluginObjects.PreparedPatterns.(typeName) = info;
+                    dmd_log(logFile, ['trial %d: prepared %s row %d: %d spots, %d frames of %.0f us ' ...
+                        '(%d sub-frames of %d us, synch %d us)%s'], preparedTrial, typeName, rowIdx, ...
+                        numel(info.spots), info.nF, illuTime, info.subFrames, info.frameUs, info.synchUs, ...
+                        pick(info.reused, ', reused', ''));
+                end
+            case 'advance'
+                if ~isempty(player), player.advance(); end
+                runningTrial = preparedTrial;
+            case 'close'
+                if ~isempty(player), delete(player); end
+                player = [];
         end
-        dmd.halt();
-        optoSeq.setRepeat(1);
-        dmd.device.projControl(C.ALP_PROJ_MODE, C.ALP_MASTER);
-        dmd.device.projStart(optoSeq);
-        fprintf('dmd_hf_sleep: opto flash row %d\n', rowIdx);
+    catch ME
+        dmd_log(logFile, 'ERROR: %s  at %s line %d', ME.message, ME.stack(1).name, ME.stack(1).line);
+        if ischar(code), warning('dmd_hf_sleep(''%s''): %s', code, ME.message); end
+    end
+end
+
+% -----------------------------------------------------------------------
+
+function showCode(player, code, logFile, trial)
+    if isempty(trial), trial = NaN; end
+    if code == 11
+        % Halt only — projecting a blank sequence would fire its own
+        % frame-synch pulse on DMD pin 8 and gate the laser on again.
+        if ~isempty(player), player.halt(); end
+        dmd_log(logFile, 'trial %d: DMD halted', trial);
         return;
     end
-
-    switch code
-        case 9,   typeName = 'CSplus';
-        case 10,  typeName = 'CSminus';
-        otherwise
-            fprintf('dmd_hf_sleep: unknown code %d\n', code); return;
+    typeName = codeType(code);
+    if isempty(player) || isempty(typeName) || ~player.show(typeName)
+        dmd_log(logFile, 'trial %d: code %d: nothing prepared', trial, code);
+        return;
     end
+    dmd_log(logFile, 'trial %d: displaying %s in MASTER mode (immediate)', trial, typeName);
+end
 
+function rowIdx = selectedRow(BpodSystem, typeName)
     rowIdx = 1;
     if isfield(BpodSystem.PluginObjects, 'SelectedPatternRow') && ...
        isfield(BpodSystem.PluginObjects.SelectedPatternRow, typeName)
         rowIdx = BpodSystem.PluginObjects.SelectedPatternRow.(typeName);
     end
-
-    dmd.halt();
-
-    design = loadDesign(BpodSystem, typeName, rowIdx, luminose.dmd.patternsFolder);
-    if isempty(design) || isempty(design.spots)  % none, or a blank
-        fprintf('dmd_hf_sleep: no design for %s row %d\n', typeName, rowIdx); return;
-    end
-    spots = design.spots; r_px = design.r_px; tickMs = design.tickMs;
-    nF       = design.nF;
-    illuTime = round(tickMs * 1000);  % ms → µs
-    hasRandom = any(~[spots.isFixed]);
-
-    [cachedSeq, cachedKey] = getCache(code, plusKey, plusSeq, minusKey, minusSeq);
-    if ~hasRandom
-        key = [rowIdx, nF, illuTime];
-    else
-        key = [];
-    end
-
-    if hasRandom || ~isequaln(cachedKey, key) || isempty(cachedSeq)
-        H = double(dmd.device.height); W = double(dmd.device.width);
-        margin = r_px + 1;
-        fixed = [spots.isFixed]; px = double([spots(fixed).x]); py = double([spots(fixed).y]);
-        for i = 1:numel(spots)
-            if ~spots(i).isFixed
-                for attempt = 1:500
-                    xt = randi([margin, W-margin]); yt = randi([margin, H-margin]);
-                    if isempty(px) || all(max(abs(px-xt), abs(py-yt)) > 2*r_px)
-                        spots(i).x = xt; spots(i).y = yt;
-                        px(end+1) = xt; py(end+1) = yt; %#ok<AGROW>
-                        break;
-                    end
-                end
-            end
-        end
-        frameStack = buildPatternFrameStack(spots, r_px, tickMs, H, W);
-        if ~isempty(cachedSeq), delete(cachedSeq); end
-        cachedSeq = allocFrameStack(dmd, frameStack, illuTime);
-        % Always store the handle back (even for random-position patterns,
-        % where key stays empty so it's rebuilt every call) so the next
-        % call can find and delete it instead of leaking the DMD sequence.
-        [plusSeq, plusKey, minusSeq, minusKey] = ...
-            setCache(code, cachedSeq, key, plusSeq, plusKey, minusSeq, minusKey);
-    end
-    dmd.halt();
-    cachedSeq.setRepeat(1);
-    dmd.device.projControl(C.ALP_PROJ_MODE, C.ALP_MASTER);
-    dmd.device.projStart(cachedSeq);
-    fprintf('dmd_hf_sleep: displaying %s row %d in MASTER mode (immediate)\n', typeName, rowIdx);
 end
 
-function seq = allocFrameStack(dmd, frameStack, illuTime_us)
-    nF  = size(frameStack, 3);
-    seq = dmd.device.allocSequence(1, nF);
-    for k = 1:nF, seq.put(k-1, 1, frameStack(:,:,k)); end
-    seq.setBinaryMode(true);
-    setFrameTiming(seq, illuTime_us); seq.setRepeat(1);
-end
-
-function design = loadDesign(BpodSystem, typeName, rowIdx, patternsFolder)
-    % Try the requested type first, then fall back to any available pattern.
-    fallback = {'CSplus', 'CSminus', 'opto', 'Left', 'Right', 'cue'};
-    candidates = [{typeName}, fallback(~strcmp(fallback, typeName))];
-    for ci = 1:numel(candidates)
-        t = candidates{ci};
-        rIdx = 1; if ci == 1, rIdx = rowIdx; end
-        design = tryLoadDesign(BpodSystem, t, rIdx, patternsFolder);
-        if ~isempty(design)
-            if ci > 1
-                fprintf('dmd_hf_sleep: no %s pattern, using %s\n', typeName, t);
-            end
-            return;
-        end
-    end
-    design = [];
-end
-
-function design = tryLoadDesign(BpodSystem, typeName, rowIdx, patternsFolder)
-    design = [];
-    try
-        pd = BpodSystem.PluginObjects.PatternDesigns;
-        if isfield(pd, typeName) && numel(pd.(typeName)) >= rowIdx && ...
-           ~isempty(pd.(typeName){rowIdx}) && isfield(pd.(typeName){rowIdx}, 'spots')
-            design = pd.(typeName){rowIdx}; return;
-        end
-    catch
-    end
-    patternsFolder = char(patternsFolder);
-    metas = dir(fullfile(patternsFolder, sprintf('designed_%s_r%d_*_meta.mat', typeName, rowIdx)));
-    if isempty(metas) && rowIdx == 1
-        all_m = dir(fullfile(patternsFolder, sprintf('designed_%s_*_meta.mat', typeName)));
-        isRow = arrayfun(@(m) ~isempty(regexp(m.name, sprintf('designed_%s_r\\d+_', typeName), 'once')), all_m);
-        metas = all_m(~isRow);
-    end
-    if isempty(metas), return; end
-    [~, newest] = max([metas.datenum]);
-    try
-        m = load(fullfile(patternsFolder, metas(newest).name), 'spots', 'tickMs', 'r_px', 'nF');
-        if ~isfield(m, 'spots') || ~isfield(m, 'tickMs'), return; end
-        for i = 1:numel(m.spots)
-            if ~isfield(m.spots(i), 'isFixed'), m.spots(i).isFixed = true; end
-        end
-        nF = 1; if isfield(m, 'nF'), nF = m.nF; end
-        design = struct('spots', m.spots, 'tickMs', m.tickMs, 'r_px', m.r_px, 'nF', nF);
-    catch, end
-end
-
-function [seq, key] = getCache(code, plusKey, plusSeq, minusKey, minusSeq)
+function typeName = codeType(code)
     switch code
-        case 9,  seq = plusSeq;  key = plusKey;
-        case 10, seq = minusSeq; key = minusKey;
-        otherwise, seq = []; key = [];
+        case 9,  typeName = 'CSplus';
+        case 10, typeName = 'CSminus';
+        case 12, typeName = 'opto';
+        otherwise, typeName = '';
     end
 end
 
-function [plusSeq,plusKey,minusSeq,minusKey] = ...
-        setCache(code,seq,key,plusSeq,plusKey,minusSeq,minusKey)
-    switch code
-        case 9,  plusSeq  = seq; plusKey  = key;
-        case 10, minusSeq = seq; minusKey = key;
+function designs = storedDesigns(BpodSystem)
+    designs = struct();
+    if isfield(BpodSystem.PluginObjects, 'PatternDesigns')
+        designs = BpodSystem.PluginObjects.PatternDesigns;
     end
+end
+
+function dmd_log(logFile, fmt, varargin)
+    fid = fopen(logFile, 'a');
+    if fid < 0, return; end
+    fprintf(fid, '[%s] ', char(datetime('now', 'Format', 'HH:mm:ss.SSS')));
+    fprintf(fid, fmt, varargin{:});
+    fprintf(fid, '\n');
+    fclose(fid);
+end
+
+function v = pick(tf, a, b)
+    if tf, v = a; else, v = b; end
 end

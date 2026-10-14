@@ -13,6 +13,8 @@ function setup = recordSetup(luminose, subject, options)
 %     setup.stageNote    why stageUm is empty, else ''
 %     setup.fiducial     the subject's newest fiducial entry (without its frame)
 %                        and its file (lhf.cam.saveFiducial), or [] for none
+%     setup.targets      the subject's targets (lhf.cam.saveTargets): file, n, names,
+%                        referenceTime; or [] for none
 %     setup.subject
 %     setup.dataFile     where Bpod is saving this session
 %     setup.dataFolderNote  '' when dataFile is inside paths.dataFolder
@@ -53,6 +55,16 @@ function setup = recordSetup(luminose, subject, options)
             entry = fid.sessions(end);
             if isfield(entry, 'frame'), entry = rmfield(entry, 'frame'); end
             setup.fiducial = struct('file', file, 'entry', entry, 'referenceTime', fid.reference.time);
+        end
+    catch
+    end
+    setup.targets = [];
+    try
+        file = lhf.cam.targetsFile(calibrationFolder, subject);
+        targets = lhf.cam.loadTargets(file);
+        if ~isempty(targets)
+            setup.targets = struct('file', file, 'n', numel(targets.list), ...
+                'names', {{targets.list.name}}, 'referenceTime', targets.referenceTime);
         end
     catch
     end

@@ -40,8 +40,8 @@ classdef DMDPatternPlayer < handle
 
     methods
         function obj = DMDPatternPlayer()
-            obj.dmd = DMDController.DMD();
-            obj.dmd.connect();
+            % the rig's one DMD (the DMD panel's too), connected if it was not
+            obj.dmd = lhf.device('dmd', 'connect');
             obj.Width = double(obj.dmd.device.width);
             obj.Height = double(obj.dmd.device.height);
             obj.MaxFrameUs = maxPictureTime(obj.dmd.device);
@@ -55,8 +55,7 @@ classdef DMDPatternPlayer < handle
                 delete(obj.entries(k).seq);  % sequences before the device
             end
             obj.entries = obj.entries([]);
-            delete(obj.dmd);
-            obj.dmd = [];
+            obj.dmd = [];  % halted, its sequences freed; the DMD itself stays connected (shared)
         end
 
         function info = prepareSpots(obj, typeName, design, illuTime_us)

@@ -4,6 +4,10 @@ function stages = rigStages(luminose, transport)
 %   stages = rigStages(luminose)
 %   stages = rigStages(luminose, transport)   a given transport (tests: simulated)
 %
+%   Without a transport these are the rig's one X, Y and Z, lhf.device('stage') (the Stage
+%   panel's too), connected if they were not; stages.close() disconnects them and closes
+%   the port (the panel can connect them again). With a transport, three new axes on it.
+%
 %   Struct x, y, z of zaberstage.Stage (ZaberStage repo), each on its device and
 %   axis from luminose.zaber.axes, sharing one transport on luminose.zaber.port
 %   ('SharedTransport', true), counted the other way where the axis says
@@ -12,13 +16,14 @@ function stages = rigStages(luminose, transport)
 %   each axis's safe range: narrow LimitsUm before moving. Errors if the config does
 %   not name all three axes, each with its safe_um.
 
+    if nargin < 2
+        stages = lhf.device('stage', 'connect');
+        return
+    end
     axes = luminose.zaber.axes;
     if ~all(isfield(axes, {'x', 'y', 'z'}))
         error('rigStages:noAxes', ['zaber.axes in luminose_config.yaml must name the x, y and z ' ...
             'axes (device and axis): read them on the rig with zaberstage.listDevices or zaberstage.app.']);
-    end
-    if nargin < 2
-        transport = zaberstage.transport.MotionLibraryTransport(char(luminose.zaber.port));
     end
     transport.open();
     stages = struct();

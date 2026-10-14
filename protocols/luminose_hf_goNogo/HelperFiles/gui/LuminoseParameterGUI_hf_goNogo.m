@@ -116,7 +116,7 @@ function varargout = LuminoseParameterGUI_hf_goNogo(varargin)
             GUIHeight = 1300;
             MaxVPos = 0;
             MaxHPos = 0;
-            BpodSystem.ProtocolFigures.ParameterGUI = figure('Position', [50 50 450 GUIHeight],'name','Luminose','numbertitle','off', 'MenuBar', 'none', 'Resize', 'on', 'Color', COLORS.background);
+            BpodSystem.ProtocolFigures.ParameterGUI = figure('Position', lhf.windowPosition('parameters', [450 GUIHeight]),'name','Luminose','numbertitle','off', 'MenuBar', 'none', 'Resize', 'on', 'Color', COLORS.background);
             BpodSystem.GUIHandles.ParameterGUI.Tabs.TabGroup = uitabgroup(BpodSystem.ProtocolFigures.ParameterGUI);
             ParamNum = 1;
             for t = 1:nTabs
@@ -445,6 +445,9 @@ function varargout = LuminoseParameterGUI_hf_goNogo(varargin)
                         'BackgroundColor', [0.2 0.7 0.3], 'ForegroundColor', 'white', ...
                         'FontName', 'Segoe UI', 'Callback', @(~,~) HandleGoNogoStartButton(LOCKED_PARAMS));
                     VPos = VPos + 60;
+                    % The devices' own panels (gui/DeviceButtons.m, lhf.devicePanel)
+                    BpodSystem.GUIHandles.ParameterGUI.DeviceButtons = DeviceButtons(htab, [15 VPos 455 32], COLORS);
+                    VPos = VPos + 42;
                 end
                 if contains(lower(TabNames{t}),'trial')
                     panelName = 'logo'; ThisPanelHeight = 125;
@@ -504,7 +507,7 @@ function varargout = LuminoseParameterGUI_hf_goNogo(varargin)
                     VPos = VPos + panelHeight + 15;
                 end
                 if VPos > MaxVPos, MaxVPos = VPos; end
-                set(BpodSystem.ProtocolFigures.ParameterGUI,'Position',[1760 100 MaxHPos+500 min(MaxVPos+120,GUIHeight)]);
+                set(BpodSystem.ProtocolFigures.ParameterGUI,'Position',lhf.windowPosition('parameters', [MaxHPos+500 min(MaxVPos+120,GUIHeight)]));  % right edge, top (the rig's layout)
             end
             nCreatedParams = ParamNum - 1;
             BpodSystem.GUIData.ParameterGUI.nParams = nCreatedParams;

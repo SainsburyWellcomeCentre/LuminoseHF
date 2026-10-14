@@ -21,7 +21,7 @@ function [onsetV, offsetV, fig] = calibrateSniffThresholds(risingEdge, recordDur
 %     Offset is placed 25% of the way (fires earlier on signal return).
 %     Hysteresis gap ≈ 15% of the median excursion.
 
-    global BpodSystem
+    global BpodSystem %#ok<GVMIS> Bpod's
 
     if nargin < 2 || isempty(recordDur_s), recordDur_s = 12; end
     if nargin < 1 || isempty(risingEdge),  risingEdge  = false; end
@@ -66,6 +66,9 @@ function [onsetV, offsetV, fig] = calibrateSniffThresholds(risingEdge, recordDur
         'StateChangeConditions', {'Tup', 'exit'}, ...
         'OutputActions', {'AnalogThreshEnable', 1});
     SendStateMachine(sma);
+    % A trial manager left polling by a stopped session would read this trial's end
+    % first, and RunStateMachine would wait forever
+    lhf.bpod.stopStrayTrialTimers();
     RunStateMachine();
 
     %% Read channel 1 directly from the binary file

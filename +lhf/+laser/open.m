@@ -8,7 +8,8 @@ function on = open(S, luminose)
 %   sent, and the laser can be unplugged. The DMD's pin 8 still gates
 %   emission, at whatever power the laser was left at.
 %
-%   With it on, the OBIS laser (obis.Laser) is connected in Digital mode with
+%   With it on, the rig's laser (lhf.device('laser'), the Laser panel's too) is
+%   connected if it was not, and put in Digital mode with
 %   emission enabled (gated by DMD pin 8, power set per trial by lhf.laser.draw
 %   and soft code 13), refusing any power above luminose.laser.maxPower_mW. A
 %   laser that does not connect stops the session here, before any trial,
@@ -31,9 +32,7 @@ function on = open(S, luminose)
         return
     end
     try
-        laser = obis.Laser('Port', char(luminose.laser.port), ...
-            'BaudRate', luminose.laser.baudRate, 'MaxPowermW', luminose.laser.maxPower_mW);
-        laser.connect();
+        laser = lhf.device('laser', 'connect');  % limited to laser.maxPower_mW
         laser.setMode('Digital');
         laser.setEnabled(true);
         BpodSystem.PluginObjects.Laser = laser;

@@ -2,7 +2,7 @@ function liveEncoderPlot_hf_sleep(axes, op, choiceThreshold, varargin)
 global BpodSystem
 switch op
     case 'init'
-        BpodSystem.GUIHandles.EncoderPlot = plot(axes, 0,0, 'k-', 'LineWidth', 2);
+        BpodSystem.GUIHandles.EncoderPlot = plot(axes, 0,0, '-', 'Color', [0 0.45 0.74], 'LineWidth', 2);  % blue
         if choiceThreshold ~= 0
             BpodSystem.GUIHandles.EncoderPlotThreshold1Line = line([0,1000],[-choiceThreshold -choiceThreshold], 'Color', 'k', 'LineStyle', ':');
             BpodSystem.GUIHandles.EncoderPlotThreshold2Line = line([0,1000],[choiceThreshold choiceThreshold], 'Color', 'k', 'LineStyle', ':');

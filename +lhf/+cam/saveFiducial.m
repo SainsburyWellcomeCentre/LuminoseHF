@@ -3,9 +3,10 @@ function fid = saveFiducial(file, entry)
 %
 %   fid = lhf.cam.saveFiducial(lhf.cam.fiducialFile(folder, animal), entry)
 %
-%   entry: struct with any of frame (the camera frame, uint16, full sensor),
-%   xy ([x y] of the mark in camera pixels, [] after an automatic alignment),
-%   exposureMs, roi, registrationFile, stageUm ([x y z] when the stages were
+%   entry: struct with any of frame (the camera frame, uint16, as read out),
+%   xy ([x y] of the mark in full-sensor camera pixels, [] after an automatic
+%   alignment), exposureMs, roi and binning (the camera's readout),
+%   registrationFile, stageUm ([x y z] when the stages were
 %   connected), stageCalibrationFile (the stage-camera calibration in force)
 %   and alignment (lhf.cam.align's result, without its frame); missing fields
 %   are saved empty, and the time and code (LuminoseHF's commit and
@@ -36,7 +37,7 @@ end
 function entry = withAllFields(entry)
 % Every entry has the same fields, in the same order (any other field is dropped)
     names = {'frame', 'xy', 'exposureMs', 'roi', 'registrationFile', 'stageUm', 'stageCalibrationFile', ...
-        'alignment', 'time', 'code'};
+        'alignment', 'time', 'code', 'binning'};
     for k = 1:numel(names)
         if ~isfield(entry, names{k}), entry.(names{k}) = []; end
     end

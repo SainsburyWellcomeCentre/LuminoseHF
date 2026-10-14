@@ -11,7 +11,7 @@ function [irradiance_mWmm2, setpoint_mW, cal] = irradianceCalibration(luminose)
 %   Designer shows it). cal is the obis.Calibration in irradiance, whose
 %   setpointFor refuses anything outside that range.
 
-    % V-7002 DMD is 1024x768; calibrate_power.m uses info.height/info.width
+    % V-7002 DMD is 1024x768; the power calibration (lhf.cal.power) lights every mirror
     DMD_ASPECT = 768 / 1024;
 
     calCsvPath = fullfile(char(luminose.f.luminose_hf), 'dmd', 'power_calibration.csv');

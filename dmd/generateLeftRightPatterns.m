@@ -8,9 +8,9 @@ function generateLeftRightPatterns(dur_ms)
 %   "right" = right half of the DMD field on, all else off
 %
 %   Saves left.bmp / right.bmp (the illumination mask) plus left_meta.mat /
-%   right_meta.mat (side, dur_ms) to luminose.dmd.patternsFolder. As with
-%   test_dmd_mat.m, the bitmap only encodes which mirrors are on; on-time
-%   (dur_ms) is applied separately when the pattern is loaded onto the device.
+%   right_meta.mat (side, dur_ms) to luminose.dmd.patternsFolder. As in the DMD
+%   panel's designed-pattern view (DMDController.app), the bitmap only encodes which
+%   mirrors are on; on-time (dur_ms) is applied separately when the pattern is loaded onto the device.
 
     if nargin < 1 || isempty(dur_ms)
         dur_ms = 200;
