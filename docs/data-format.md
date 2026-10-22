@@ -42,6 +42,7 @@ In `<dataFolder>/calibration/`, from the Calibration window or `calibration/cali
 | `…Actions.Patterns.<type>` | each pattern the DMD was given for the trial (goNogo, powercal, 2AFC, MTS: `DMDPatternPlayer.prepareSpots`): `row`, `shown`; when shown `spots` *as projected* (random spots placed), `r_px`, `tickMs`, `nF`, `exposureUs`, `subFrames`, `frameUs`, `synchUs`, `reused`, and the design's `laserIrradiances_mWmm2`/`laserWeights`; when not, `blankMs`. Sleep: `Patterns.opto`, the design of the drawn row |
 | `RawEvents.Trial{n}.States.DeliverStim` | the stimulus state (MTS: `DeliverStimTemplate`, `DeliverStimMatch`); with `ShowCue`, it lasts as long as what it shows: a pattern's design, an odour's sequence, or the light or sound panel's `Duration` (docs/architecture.md, D13) |
 | `SniffInhalationOnset_s(n)`, `SniffInhalationOffset_s(n)` | from the sniff detector |
+| `RecordDuration_s(n)` | seconds spent recording, plotting and saving after trial *n*'s data came (goNogo, powercal, 2AFC, MTS; from 2026-10-21, when the per-step timings stopped being printed) |
 | `EncoderData{n}` | rotary encoder stream, times relative to the trial's first encoder event |
 | `LaserIrradiance_mWmm2(n)`, `LaserSetpoint_mW(n)` | goNogo, powercal, 2AFC, MTS: the power set for trial *n*, drawn from the shown pattern's design (docs/architecture.md, D12); NaN when none was set: Laser control off, no pattern stimulus, or a pattern row with no design (powercal's default CS+) |
 
@@ -59,7 +60,7 @@ Until 2026-09-29 (files without `RandomSeed`), 2AFC and MTS scored a trial with 
 | `Setup` | from 2026-10-05, `lhf.recordSetup` at START: everything the preparation left in force. `provenance` (`lhf.provenance`: `time`, `computer`, `user`, `matlab`, `toolboxes`; `code`, one per repository: LuminoseHF, OBISLaser, ZaberStage, HamamatsuCam, NIDAQOlfactometer, Bpod_Gen2, DMDController, each `commit`, `branch`, `dirty`, `status`, `diff` (uncommitted changes), `untracked` and `untrackedFiles` (their text); `config`: the YAML's `text` and every `LuminoseConstants` value as a plain struct). `calibration` (`lhf.calibrationSnapshot`: `power` (the CSV's text and table, the newest `power_*.mat`), `spotGain`, `cameraDmd`, `stageCamera`, `zProfile` (the newest of each, with its file), `odourTables` (the bottle and chemical tables' text), `notes`). `stageUm` (Zaber `[x y z]` at START, or `[]` and `stageNote`). `fiducial` (the subject's newest fiducial entry without its frame, its `file`, `referenceTime`). `targets` (from 2026-10-13: the subject's targets file, `n`, `names`, `referenceTime`, or `[]`). `subject`. `lhf.recreate(dataFile, folder)` writes it all out as files |
 | `OdourDeliveries` | from 2026-10-05, every odour soft code: `Trial`, `Type`, `Valves`, `Duty` (as sent), `Time`, `Ok`, `Message` (why one was refused) |
 | `RandomSeed` | the session seed (`lhf.random`); put it in `S.RandomSeed` to repeat the session's draws |
-| `StoppedReason` | `lhf.stopRecord`: `Reason` (`completed`, `operator`, `error`, `unknown`), `Trial`, `Time`, `Message`, `Identifier`, `Stack` |
+| `StoppedReason` | `lhf.stopRecord`: `Reason` (`completed`, `operator`, `error`, `unknown`), `Trial`, `Time`, `Message`, `Identifier`, `Stack`. An error after Bpod's Stop (e.g. a plot it closed, mid-trial) is `operator`, with the error kept in `Message`; before 2026-10-20 it was `error` |
 | `SettingsNotes` | what `lhf.mergeSettings` changed when loading the settings file (cell of text; empty for none) |
 | `GitHash` | the repository commit the session ran |
 | `GUIMeta` | the settings' labels and styles |
@@ -70,6 +71,8 @@ Until 2026-09-29 (files without `RandomSeed`), 2AFC and MTS scored a trial with 
 ## Settings file (`S`, Bpod's `ProtocolSettings`)
 
 `S.GUI` values, `S.GUIMeta`/`GUIPanels`/`GUITabs` declarations, and `S.RandomSeed` (normally empty).
+
+Each session saves its settings back to the file it loaded as it ends (`lhf.bpod.saveSettings`). Until 2026-10-21 a session ended with Bpod's Stop button saved them to `matlab.mat` in the protocol's folder instead (Stop empties Bpod's settings path first), so the subject's file kept the settings it started with.
 
 Pattern designs (`designed_<type>_r<row>_<time>_meta.mat`) hold `spots`, `tickMs`, `r_px`, `nF`, for types with laser options `laserIrradiances_mWmm2` and `laserWeights`, and for a blank (saved with no spots) `blankMs`, how long it shows nothing (its tick).
 

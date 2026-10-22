@@ -7,7 +7,7 @@ function GUIparams_luminose_hf_sleep()
     S.GUIPanels.TestPulses = {'TestPulses', 'TestPulsesType'};
     S.GUIPanels.TreatmentType = {'Ephys', 'EEG', 'Drug'};
     S.GUIPanels.ProtocolSettings = {'Sleep', 'muBarcodeDur', 'sigmaBarcodeDur'};
-    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'CalibrateSniff'};
+    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'CalibrateSniff', 'AnalogViewer'};
 
     % == Trial Params ==
     S.GUI.maxTrials = 10000;  
@@ -125,5 +125,8 @@ function GUIparams_luminose_hf_sleep()
     S.GUIMeta.CalibrateSniff.String = 'Calibrate Sniff (12s)';
     S.GUIMeta.CalibrateSniff.Callback = 'RunSniffCalibration';
     S.GUIMeta.CalibrateSniff.CallbackArg = '';
+    S.GUI.AnalogViewer = false;  % Bpod's Flex I/O viewer: open only when ticked (the data are recorded either way)
+    S.GUIMeta.AnalogViewer.Style = 'checkbox';
+    S.GUIMeta.AnalogViewer.Label = 'Analog viewer';
 
 end

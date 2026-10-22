@@ -5,6 +5,7 @@ function [fig, ax] = createFigure(varargin)
 %   [fig, ax] = lhf.plot.createFigure('Visible', 'off')   (extra figure properties)
 %   [fig, ax] = lhf.plot.createFigure('WithPower', true, ...)
 %   [fig, ax] = lhf.plot.createFigure('WithDprime', true, ...)
+%   [fig, ax] = lhf.plot.createFigure('WithAnalog', true, ...)
 %
 %   A single graphics canvas instead of one per plot. The outcome plot spans
 %   the top row; accuracy, reward, response time and encoder sit in a 2x2
@@ -13,14 +14,17 @@ function [fig, ax] = createFigure(varargin)
 %   spans the window for performance against laser power, ax.Power
 %   (lhf.plot.power). With 'WithDprime', true a row spanning the window under the
 %   2x2 grid holds the moving d' of a go/no-go task, ax.Dprime (lhf.plot.dprime).
+%   With 'WithAnalog', true a last row spanning the window holds the last trial's Flex
+%   analog channels, ax.Analog (lhf.plot.analog).
 
     [withPower, varargin] = takeOption(varargin, 'WithPower');
     [withDprime, varargin] = takeOption(varargin, 'WithDprime');
+    [withAnalog, varargin] = takeOption(varargin, 'WithAnalog');
 
     fig = figure('Position', [30 285 1000 1100], ...
         'name', 'Live Plots', 'numbertitle', 'off', 'MenuBar', 'none', 'Resize', 'on', ...
         varargin{:});
-    t = tiledlayout(fig, 3 + withDprime + withPower, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
+    t = tiledlayout(fig, 3 + withDprime + withPower + withAnalog, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
 
     ax.Outcome  = nexttile(t, [1 2]);
     ax.Accuracy = nexttile(t);
@@ -32,6 +36,9 @@ function [fig, ax] = createFigure(varargin)
     end
     if withPower
         ax.Power = nexttile(t, [1 2]);
+    end
+    if withAnalog
+        ax.Analog = nexttile(t, [1 2]);
     end
 end
 

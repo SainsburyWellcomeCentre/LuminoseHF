@@ -17,6 +17,7 @@ function luminose_hf_goNogo
     % Defaults come from GUIparams; a saved settings file is merged into them
     % (renamed and retired settings: lhf.settingsHistory)
     saved = BpodSystem.ProtocolSettings;
+    lhf.bpod.saveSettings('remember');  % where cleanup saves them, even after Stop
     S = struct();
     GUIparams_luminose_hf_goNogo();
     settingsNotes = {};
@@ -79,13 +80,14 @@ function luminose_hf_goNogo
 
     %% Begin plotting
     % All live plots share one window: one graphics canvas instead of five
-    [BpodSystem.ProtocolFigures.LivePlots, plotAxes] = lhf.plot.createFigure('WithDprime', true);
+    [BpodSystem.ProtocolFigures.LivePlots, plotAxes] = lhf.plot.createFigure('WithDprime', true, 'WithAnalog', true);
     lhf.plot.outcome(plotAxes.Outcome, 'init', info, currentTrialType);
     lhf.plot.accuracy(plotAxes.Accuracy, 'init', info);
     lhf.plot.dprime(plotAxes.Dprime, 'init');
     lhf.plot.reward(plotAxes.Reward, 'init');
     lhf.plot.responseTime(plotAxes.Response, 'init');
     lhf.plot.encoder(plotAxes.Encoder, 'init', 0);
+    lhf.plot.analog(plotAxes.Analog, 'init', {'Sniff', 'Photodetector', 'Flowmeter', 'NI-DAQ'});  % Flex channels 1-4
 
     BpodNotebook('init');
 
@@ -96,15 +98,13 @@ function luminose_hf_goNogo
     channelTypes(chanPhotodetector) = 2; % Analog Input
     channelTypes(chanFlowmeter) = 2; % Analog Input
     channelTypes(chanNIDAQ) = 2; % Digital Input
+    BpodSystem.SerialPort.flush;  % stray bytes (a session stopped mid-trial) would be read as its confirmations
     BpodSystem.FlexIOConfig.channelTypes = channelTypes;
 
     sniffDetector = SniffDetector(chanSniff, 500);
     sniffDetector.configure(S.GUI.SniffOnsetThreshold, S.GUI.SniffOffsetThreshold);
 
-    lhf.bpod.startFlexViewer();  % a fresh trace buffer (not a reused, broken one)
-    flexioPos = get(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position');
-    flexioPos(1:2) = [30, 65];
-    set(BpodSystem.GUIHandles.OscopeFig_Builtin, 'Position', flexioPos);
+    lhf.bpod.showFlexViewer(S.GUI.AnalogViewer);  % Sniff panel's Analog viewer; recorded either way
 
     %% Assert modules are USB-paired
     BpodSystem.assertModule({'HiFi','RotaryEncoder'}, [1 1]);
@@ -150,6 +150,7 @@ function luminose_hf_goNogo
     %% Prepare and start first trial
     saveOnlinePlotsOnClose();
     trialManager = BpodTrialManager;
+    releaseBpod = onCleanup(@() lhf.bpod.release(trialManager, R)); %#ok<NASGU> their timers hold them: never freed otherwise
     [sma, ~, currentActions] = PrepareStateMachine(S, currentTrialType, 1, ITI);
     dmd_hf_goNogo('prepare', dmdSoftCodes(sma));
     currentActions.Patterns = BpodSystem.PluginObjects.PreparedPatterns;  % what the DMD will show
@@ -165,8 +166,8 @@ function luminose_hf_goNogo
     %% Main trial loop
     for currentTrial = 1:S.GUI.maxTrials
         try
-            t1 = tic;
             S = LuminoseParameterGUI_hf_goNogo('sync', S);
+            lhf.bpod.showFlexViewer(S.GUI.AnalogViewer);  % opened or closed as the box was ticked
 
             currentTrialType = nextTrialType;
 
@@ -187,11 +188,10 @@ function luminose_hf_goNogo
             BpodSystem.PluginObjects.SelectedOdourRow = BpodSystem.PluginObjects.NextOdourRow;  % odour rows of the trial now starting
             if handle_pause_condition(H, R), BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial); break; end
 
-            t2 = tic;
+            tRecord = tic;  % recording, plots and saving: Data.RecordDuration_s
             if strcmp(S.GUIMeta.ResponseType.String(S.GUI.ResponseType), 'Rotary Encoder')
                 R.setAdvancedThresholds([-35 10 10], [0 1 1], [0 S.GUI.ResponseTime 0.2]);
             end
-            disp(['set RE: ', num2str(toc(t2))]);
 
             if currentTrial < S.GUI.maxTrials
                 trialManager.startTrial();
@@ -217,33 +217,24 @@ function luminose_hf_goNogo
                 BpodSystem.Data = BpodNotebook('sync', BpodSystem.Data);
 
                 if currentTrial == 1
-                    eventData = R.readUSBStream(0);
+                    eventData = lhf.bpod.readEncoder(R, 0);
                     if ~isempty(eventData.EventTimestamps)
                         TrialStartTime = eventData.EventTimestamps(1);
                     else
                         TrialStartTime = 0;
                     end
                 end
-                BpodSystem.Data.EncoderData{currentTrial} = R.readUSBStream(0);
+                BpodSystem.Data.EncoderData{currentTrial} = lhf.bpod.readEncoder(R, 0);
 
-                t3 = tic;
                 lhf.plot.outcome(plotAxes.Outcome, 'update', BpodSystem.Data, nextTrialType);
-                disp(['Updated outcome plot: ', num2str(toc(t3))]);
 
-                t4 = tic;
                 lhf.plot.accuracy(plotAxes.Accuracy, 'update', BpodSystem.Data);
                 lhf.plot.dprime(plotAxes.Dprime, 'update', BpodSystem.Data);
-                disp(['Updated accuracy plot: ', num2str(toc(t4))]);
 
-                t5 = tic;
                 lhf.plot.reward(plotAxes.Reward, 'update', BpodSystem.Data);
-                disp(['Updated reward plot: ', num2str(toc(t5))]);
 
-                t6 = tic;
                 lhf.plot.responseTime(plotAxes.Response, 'update', BpodSystem.Data);
-                disp(['Updated response time plot: ', num2str(toc(t6))]);
 
-                t7 = tic;
                 if currentTrial == 1
                     if ~isempty(BpodSystem.Data.EncoderData{currentTrial}.EventTimestamps)
                         NextTrialStartTime = BpodSystem.Data.EncoderData{currentTrial}.EventTimestamps(1);
@@ -262,17 +253,23 @@ function luminose_hf_goNogo
 
                 TrialDuration = BpodSystem.Data.TrialEndTimestamp(currentTrial) - BpodSystem.Data.TrialStartTimestamp(currentTrial);
                 lhf.plot.encoder(plotAxes.Encoder, 'update', 0, BpodSystem.Data.EncoderData{currentTrial}, TrialDuration);
-                disp(['Updated rotary encoder plot: ', num2str(toc(t7))]);
+                [analogT, analogV] = lhf.bpod.readTrialAnalog(BpodSystem.AnalogDataFile, ...
+                    sum(BpodSystem.HW.FlexIO_ChannelTypes == 2), currentTrial, BpodSystem.HW.FlexIO_SamplingRate, ...
+                    fileparts(BpodSystem.Path.CurrentDataFile));
+                lhf.plot.analog(plotAxes.Analog, 'update', analogT, analogV);
                 drawnow nocallbacks  % one redraw of the live-plot window per trial
 
-                t8 = tic;
                 if mod(currentTrial, 5) == 0, SaveBpodSessionData; end
-                disp(['Saved data: ', num2str(toc(t8))]);
+                BpodSystem.Data.RecordDuration_s(currentTrial) = toc(tRecord);
             end
             if currentTrial < S.GUI.maxTrials
                 currentActions = nextActions;
             end
         catch ME
+            if BpodSystem.Status.BeingUsed == 0  % Stop pressed mid-trial: what it closed (the plots) fails after
+                BpodSystem.Data.StoppedReason = lhf.stopRecord('operator', currentTrial, ME);
+                break
+            end
             BpodSystem.Data.StoppedReason = lhf.stopRecord('error', currentTrial, ME);
             disp('=== CRASH ===');
             disp(ME.message);
@@ -511,7 +508,6 @@ end
 function cleanup()
     global BpodSystem S luminose sniffDetector %#ok<NUSED>
     lhf.bpod.stopStrayTrialTimers();  % stopped mid-trial: its polling timer would stay
-    lhf.bpod.flexRepairTimer('stop');
     lhf.lockDevicePanels(false);  % the Laser and DMD panels usable again
     dmd_hf_goNogo('close');
     lhf.laser.close();  % emission off, port freed (nothing to do with Laser control off)
@@ -524,7 +520,7 @@ function cleanup()
         BpodSystem.Data.StoppedReason = lhf.stopRecord('unknown', NaN);  % setup error or Ctrl+C
     end
     SaveBpodSessionData;
-    SaveBpodProtocolSettings;
+    lhf.bpod.saveSettings('save');  % the subject's file, also after Stop emptied Bpod's path
     lhf.report.write(BpodSystem.Data, lhf.protocolInfo('goNogo'), BpodSystem.Path.CurrentDataFile);
     diary off;
     if BpodSystem.Status.BeingUsed == 1

@@ -7,7 +7,7 @@ function GUIparams_luminose_hf_powercal()
     S.GUIPanels.TestPulses = {'TestPulses', 'TestPulsesType'};
     S.GUIPanels.TreatmentType = {'Ephys', 'EEG', 'Drug'};
     S.GUIPanels.ProtocolSettings = {'Sleep', 'muBarcodeDur', 'sigmaBarcodeDur'};
-    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffTrigger', 'CalibrateSniff'};
+    S.GUIPanels.Sniff = {'SniffOnsetThreshold', 'SniffOffsetThreshold', 'SniffTrigger', 'CalibrateSniff', 'AnalogViewer'};
 
     % == Training Params ==
     S.GUI.TrainingLevel = 2; % Default Training Level
@@ -65,6 +65,9 @@ function GUIparams_luminose_hf_powercal()
     S.GUIMeta.CalibrateSniff.String = 'Calibrate Sniff (12s)';
     S.GUIMeta.CalibrateSniff.Callback = 'RunSniffCalibration';
     S.GUIMeta.CalibrateSniff.CallbackArg = '';
+    S.GUI.AnalogViewer = false;  % Bpod's Flex I/O viewer: open only when ticked (the data are recorded either way)
+    S.GUIMeta.AnalogViewer.Style = 'checkbox';
+    S.GUIMeta.AnalogViewer.Label = 'Analog viewer';
 
     %% ===== Task =====
     S.GUITabs.Task = {'ITI', 'Response', 'Stimulus', 'CueParams'};

@@ -83,6 +83,23 @@ classdef LivePlotsTest < matlab.unittest.TestCase
             tc.verifyClass(axs.Power, 'matlab.graphics.axis.Axes');
         end
 
+        function analogShowsEachChannelOfTheLastTrial(tc)
+            [window, axs] = lhf.plot.createFigure('Visible', 'off', 'WithAnalog', true);
+            tc.addTeardown(@() delete(window));
+            names = {'Sniff', 'Photodetector', 'Flowmeter', 'NI-DAQ'};
+            lhf.plot.analog(axs.Analog, 'init', names);
+            st = axs.Analog.UserData;
+            tc.verifyEqual({st.traces.DisplayName}, names);
+            t = (0:4999)' / 1000;  % 5 s at 1 kHz: thinned to 2000 points
+            volts = [sin(t) + 2, t / 5, ones(size(t)), zeros(size(t))];
+            lhf.plot.analog(axs.Analog, 'update', t, volts);
+            tc.verifyLessThanOrEqual(numel(st.traces(1).XData), 2000);
+            tc.verifyEqual(st.traces(3).YData(:), ones(numel(st.traces(3).YData), 1));
+            tc.verifyEqual(axs.Analog.XLim, [0 t(end)]);
+            lhf.plot.analog(axs.Analog, 'update', zeros(0, 1), zeros(0, 4));  % no samples: kept
+            tc.verifyEqual(axs.Analog.XLim, [0 t(end)]);
+        end
+
         function accuracyReadsTheStoredOutcomes(tc)
             C = lhf.Outcome.Correct; I = lhf.Outcome.Incorrect;
             data = fakeSession([1 1 2 2], [C I C C]);
